@@ -1,0 +1,24 @@
+node_modules/
+.env
+.env.local
+*.log
+.DS_Store
+
+# tooling
+.serena/
+.unlazy/
+.unlazy-hook-state.json
+.claude/settings.local.json
+
+# contracts
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+contracts/coverage/
+contracts/coverage.json
+
+# web
+web/.next/
+web/next-env.d.ts
+web/data/
+web/*.tsbuildinfo
