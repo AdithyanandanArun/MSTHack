@@ -23,7 +23,7 @@ import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { createSiweMessage } from "viem/siwe";
 import { adjudicationHash, computeCommitment, findingHash, randomNonce, type FindingContent } from "../src/lib/canonical";
 import { localHardhat } from "../src/lib/chain/chains";
-import { releaseBondAbi } from "../src/lib/chain/releaseBondArtifact";
+import { releaseBondAbi, releaseBondBytecode } from "../src/lib/chain/releaseBondArtifact";
 
 const BASE = process.env.E2E_BASE!;
 const RPC = process.env.E2E_RPC!;
@@ -38,6 +38,7 @@ const KEYS: Hex[] = [
   "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a",
   "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba",
   "0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e",
+  "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356",
 ];
 
 const chain = { ...localHardhat, rpcUrls: { default: { http: [RPC] } } };
@@ -165,11 +166,12 @@ async function submitFinding(who: Actor, roomId: number, artifactHash: Hex, c: F
 }
 
 async function main() {
-  const [owner, dev, alice, bob, carol, dave, erin] = KEYS.map(
-    (k, i) => new Actor(["owner/moderator", "developer", "alice", "bob", "carol", "dave", "erin (appeals moderator)"][i], privateKeyToAccount(k)),
+  const [owner, dev, alice, bob, carol, dave, erin, frank] = KEYS.map(
+    (k, i) =>
+      new Actor(["owner/moderator", "developer", "alice", "bob", "carol", "dave", "erin (appeals moderator)", "frank (panel moderator)"][i], privateKeyToAccount(k)),
   );
   console.log("• sign in all wallets with SIWE");
-  for (const a of [owner, dev, alice, bob, carol, dave, erin]) await a.signIn();
+  for (const a of [owner, dev, alice, bob, carol, dave, erin, frank]) await a.signIn();
   const me = await alice.ok<{ address: string }>("GET", "/api/auth/me");
   assert(me.address === alice.address, "session cookie identifies the signed-in wallet");
   const forged = await new Actor("anon", alice.account).req("GET", "/api/auth/me");
@@ -191,15 +193,18 @@ async function main() {
   assert(art.diff.added.includes("scripts/telemetry.js"), "diff against 1.0.0 shows the new install script");
   assert(art.scan.some((f) => f.observation === "FS_SENSITIVE_READ"), "static scan flags the sensitive read");
 
+  await owner.tx("setModerator", [frank.account.address, true]);
+  const badPanel = await dev.req("POST", "/api/rooms/draft", { artifactSha256: art.sha256, moderator: owner.address, panel: [dave.address], panelQuorum: 1 });
+  assert(badPanel.status === 400, "only registered moderators can sit on a panel");
   const unauth = await new Actor("anon", dev.account).req("POST", "/api/rooms/draft", { artifactSha256: art.sha256, moderator: owner.address });
   assert(unauth.status === 401, "room drafts require sign-in");
   const selfMod = await owner.req("POST", "/api/rooms/draft", { artifactSha256: art.sha256, moderator: owner.address });
   assert(selfMod.status === 400, "developer cannot pick themselves as moderator");
 
-  const draft = await dev.ok<{ params: { ecosystem: string; packageName: string; version: string; artifactHash: Hex; previousArtifactHash: Hex; moderator: Address } }>(
+  const draft = await dev.ok<{ params: { ecosystem: string; packageName: string; version: string; artifactHash: Hex; previousArtifactHash: Hex; moderator: Address; panel: Address[]; panelQuorum: number } }>(
     "POST",
     "/api/rooms/draft",
-    { artifactSha256: art.sha256, title: "E2E demo room", description: "Break the **2.0.0** release.", moderator: owner.address, requireVerified: true },
+    { artifactSha256: art.sha256, title: "E2E demo room", description: "Break the **2.0.0** release.", moderator: owner.address, requireVerified: true, panel: [frank.address], panelQuorum: 1 },
   );
   const bounty = parseEther("100");
   const createHash = await dev.tx("createRoom", [{ ...draft.params, huntDuration: 600n, disclosureDuration: 120n, adjudicationWindow: 86400n }], bounty);
@@ -359,13 +364,42 @@ async function main() {
   assert(prepared.args.reviews.length === 2, "bob and dave receive review awards");
 
   const pendingBefore = (await pub.readContract({ address: CONTRACT, abi: releaseBondAbi, functionName: "pendingWithdrawals", args: [alice.account.address] })) as bigint;
-  await owner.tx("finalizeSettlement", [
+  const settleArgs = (sigs: Hex[]) => [
     BigInt(roomId),
     prepared.args.discoveries.map((d) => ({ ...d, amount: BigInt(d.amount) })),
     prepared.args.reviews.map((r) => ({ ...r, amount: BigInt(r.amount) })),
     prepared.args.rejected,
     prepared.adjudicationHash,
-  ]);
+    sigs,
+  ];
+
+  console.log("• moderator panel approval");
+  const status = await frank.ok<{ panel: { panel: string[]; quorum: number; frozen: { adjudicationHash: Hex; awardsHash: Hex }; approvals: unknown[] } }>("GET", `/api/rooms/${roomId}/settlement`);
+  assert(status.panel.quorum === 1 && status.panel.panel[0] === frank.address && status.panel.approvals.length === 0, "panel indexed from chain with no approvals yet");
+  assert(status.panel.frozen.adjudicationHash === prepared.adjudicationHash, "panel signs the frozen record the moderator will submit");
+  let refused = false;
+  try {
+    await owner.tx("finalizeSettlement", settleArgs([]));
+  } catch {
+    refused = true;
+  }
+  assert(refused, "settlement refused without panel approval");
+  const typed = {
+    domain: { name: "ReleaseBond", version: "1", chainId: chain.id, verifyingContract: CONTRACT },
+    types: { Settlement: [{ name: "roomId", type: "uint256" }, { name: "adjudicationHash", type: "bytes32" }, { name: "awardsHash", type: "bytes32" }] },
+    primaryType: "Settlement",
+    message: { roomId: BigInt(roomId), adjudicationHash: status.panel.frozen.adjudicationHash, awardsHash: status.panel.frozen.awardsHash },
+  } as const;
+  const erinSig = await erin.account.signTypedData(typed);
+  assert((await erin.req("POST", `/api/rooms/${roomId}/settlement/approve`, { signature: erinSig })).status === 403, "non-panelists cannot approve");
+  const wrongSig = await frank.account.signTypedData({ ...typed, message: { ...typed.message, awardsHash: `0x${"9".repeat(64)}` } });
+  assert((await frank.req("POST", `/api/rooms/${roomId}/settlement/approve`, { signature: wrongSig })).status === 400, "approvals of different awards are rejected");
+  const frankSig = await frank.account.signTypedData(typed);
+  const approved = await frank.ok<{ approvals: number; quorum: number }>("POST", `/api/rooms/${roomId}/settlement/approve`, { signature: frankSig });
+  assert(approved.approvals === 1 && approved.quorum === 1, "panelist approval collected");
+  const collected = await owner.ok<{ panel: { approvals: { signature: Hex }[] } }>("GET", `/api/rooms/${roomId}/settlement`);
+  await owner.tx("finalizeSettlement", settleArgs(collected.panel.approvals.map((a) => a.signature)));
+  assert(true, "panel room settled with the panel signature");
   const settledRoom = await carol.ok<{ phase: string; room: { adjudication_hash: string; refunded_wei: string } }>("GET", `/api/rooms/${roomId}`);
   assert(settledRoom.phase === "settled", "room settled");
   assert(settledRoom.room.adjudication_hash === prepared.adjudicationHash.toLowerCase(), "on-chain adjudication hash matches the published record");
@@ -412,6 +446,15 @@ async function main() {
   }
   assert(limited && Number(limited.headers.get("retry-after")) > 0, "write endpoints rate limited with Retry-After");
   assert((await dave.req("GET", `/api/findings/${aliceF.id}`)).status === 200, "reads unaffected by write limits");
+  let verifyLimited = false;
+  for (let i = 0; i < 20 && !verifyLimited; i++) {
+    const { nonce } = await dave.ok<{ nonce: string }>("POST", "/api/auth/nonce");
+    const message = createSiweMessage({ domain: new URL(BASE).host, address: dave.account.address, uri: BASE, version: "1", chainId: chain.id, nonce, issuedAt: new Date() });
+    const r = await dave.req("POST", "/api/auth/verify", { message, signature: `0x${"ab".repeat(65)}` });
+    verifyLimited = r.status === 429;
+  }
+  await alice.signIn();
+  assert(verifyLimited, "sign-in limits are per wallet: a flooded wallet is throttled while others still sign in");
   const blob = () => {
     const f = new FormData();
     f.set("file", new Blob([Buffer.alloc(600_000, 97)]), "big-log.txt");
@@ -421,6 +464,20 @@ async function main() {
   const overQuota = await carol.req("POST", "/api/uploads", blob());
   const otherWallet = await dave.req("POST", "/api/uploads", blob());
   assert(overQuota.status === 413 && otherWallet.status === 201, "upload quota enforced per wallet");
+
+  console.log("• in-app deployment registration (/admin)");
+  const deployAndRegister = async (who: Actor, bytecode: Hex, args: unknown[] = []) => {
+    const hash = await who.wallet.deployContract({ abi: args.length ? releaseBondAbi : [], bytecode, args, account: who.account, chain } as never);
+    await pub.waitForTransactionReceipt({ hash });
+    return who.req("POST", "/api/admin/contract", { txHash: hash });
+  };
+  const genuine = await deployAndRegister(owner, releaseBondBytecode, [owner.account.address]);
+  assert(genuine.status === 200, "genuine deployment accepted despite immutables");
+  // Tiny contract whose runtime just returns 42: must not pass as ReleaseBond.
+  const foreign = await deployAndRegister(owner, "0x600a600c600039600a6000f3602a60005260206000f3");
+  assert(foreign.status === 400, "foreign bytecode rejected");
+  const notOwner = await deployAndRegister(dev, releaseBondBytecode, [dev.account.address]);
+  assert(notOwner.status === 403, "only the current owner can register a replacement deployment");
 
   console.log(`\nE2E LIFECYCLE PASSED (${checks} checks)`);
 }
