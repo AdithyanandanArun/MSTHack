@@ -73,3 +73,19 @@ describe("pacman helpers", () => {
     expect(hooks.post_install).toContain("systemctl enable");
   });
 });
+
+describe("archive safety", () => {
+  it("aborts zstd decompression bombs before exhausting memory", async () => {
+    const { zstdBounded } = await import("@/lib/evidence/archive");
+    const { execFileSync } = await import("node:child_process");
+    let bomb: Buffer;
+    try {
+      bomb = execFileSync("zstd", ["-19", "-c"], { input: Buffer.alloc(8 * 1024 * 1024) });
+    } catch {
+      return; // zstd CLI not installed: covered by the pacman adapter gate instead
+    }
+    expect(bomb.length).toBeLessThan(64 * 1024);
+    expect(() => zstdBounded(bomb, 1024 * 1024)).toThrow(/expands beyond/);
+    expect(zstdBounded(bomb, 16 * 1024 * 1024).length).toBe(8 * 1024 * 1024);
+  });
+});

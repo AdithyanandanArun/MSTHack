@@ -27,10 +27,10 @@ export const POST = route(async (req) => {
   const moderator = body.moderator.toLowerCase();
   if (!isModerator(moderator)) throw new HttpError(400, "not a registered moderator");
   if (moderator === developer) throw new HttpError(400, "you cannot moderate your own release");
-  const active = db().prepare("SELECT id FROM rooms WHERE artifact_hash = ? AND status = 'active'").get(`0x${art.sha256}`) as
+  const active = db().prepare("SELECT id FROM rooms WHERE artifact_hash = ? AND developer = ? AND status = 'active'").get(`0x${art.sha256}`, developer) as
     | { id: number }
     | undefined;
-  if (active) throw new HttpError(409, `this exact artifact already has an active room (#${active.id})`);
+  if (active) throw new HttpError(409, `you already have an active room for this exact artifact (#${active.id})`);
 
   db()
     .prepare(

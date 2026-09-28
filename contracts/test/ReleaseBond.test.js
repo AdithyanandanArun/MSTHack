@@ -98,7 +98,7 @@ describe("ReleaseBond", function () {
       expect(room.disclosureEndsAt - room.huntEndsAt).to.equal(BigInt(2 * DAY));
       expect(room.adjudicationDeadline - room.disclosureEndsAt).to.equal(BigInt(14 * DAY));
       expect(await rb.phaseOf(1)).to.equal(Phase.Hunting);
-      expect(await rb.activeRoomForArtifact(ARTIFACT)).to.equal(1n);
+      expect(await rb.activeRoomForArtifact(ARTIFACT, developer.address)).to.equal(1n);
     });
 
     it("rejects unfunded rooms, bad parameters and unregistered moderators", async function () {
@@ -135,11 +135,17 @@ describe("ReleaseBond", function () {
       ).to.be.revertedWithCustomError(rb, "ConflictOfInterest");
     });
 
-    it("allows only one active room per exact artifact", async function () {
+    it("allows one active room per artifact per funder, and lets others fund it too", async function () {
       const { rb, developer, moderator, alice } = await loadFixture(roomFixture);
       await expect(
-        rb.connect(alice).createRoom(roomParams({ moderator: moderator.address }), { value: 1 }),
+        rb.connect(developer).createRoom(roomParams({ moderator: moderator.address }), { value: 1 }),
       ).to.be.revertedWithCustomError(rb, "ArtifactHasActiveRoom");
+      // A third party (e.g. a community sponsor) opening a room on the same
+      // artifact must not block the developer, and vice versa.
+      await expect(rb.connect(alice).createRoom(roomParams({ moderator: moderator.address }), { value: 1 })).to.emit(
+        rb,
+        "RoomCreated",
+      );
       const other = roomParams({ moderator: moderator.address, version: "3.7.1", artifactHash: PREVIOUS });
       await expect(rb.connect(developer).createRoom(other, { value: 1 })).to.emit(rb, "RoomCreated");
     });
@@ -273,7 +279,7 @@ describe("ReleaseBond", function () {
       expect(await rb.pendingWithdrawals(bob.address)).to.equal(eth("100"));
       expect(await rb.pendingWithdrawals(outsider.address)).to.equal(eth("50"));
       expect(await rb.pendingWithdrawals(developer.address)).to.equal(eth("50"));
-      expect(await rb.activeRoomForArtifact(ARTIFACT)).to.equal(0n);
+      expect(await rb.activeRoomForArtifact(ARTIFACT, developer.address)).to.equal(0n);
       expect((await rb.getRoom(roomId)).adjudicationHash).to.equal(ADJ);
 
       const aliceStats = await rb.statsOf(alice.address);
@@ -391,7 +397,7 @@ describe("ReleaseBond", function () {
         .to.emit(rb, "RoomRefunded")
         .withArgs(roomId, developer.address, eth("500"), "no commitments");
       expect(await rb.phaseOf(roomId)).to.equal(Phase.Refunded);
-      expect(await rb.activeRoomForArtifact(ARTIFACT)).to.equal(0n);
+      expect(await rb.activeRoomForArtifact(ARTIFACT, developer.address)).to.equal(0n);
       await expect(rb.connect(developer).withdraw()).to.changeEtherBalance(developer, eth("500"));
     });
 

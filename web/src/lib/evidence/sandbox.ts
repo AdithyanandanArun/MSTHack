@@ -76,11 +76,18 @@ strace -f -qq -s 256 -e trace=openat,execve,connect -o /out/strace-require.log t
 echo "== require exit $?"
 `;
 
-function sh(cmd: string, args: string[], opts: { input?: string; timeoutMs?: number } = {}): Promise<{ code: number | null; out: string }> {
+function sh(
+  cmd: string,
+  args: string[],
+  opts: { input?: string; timeoutMs?: number; onTimeout?: () => void } = {},
+): Promise<{ code: number | null; out: string }> {
   return new Promise((resolve) => {
     const p = spawn(cmd, args, { stdio: ["pipe", "pipe", "pipe"] });
     let out = "";
-    const timer = setTimeout(() => p.kill("SIGKILL"), opts.timeoutMs ?? RUN_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      opts.onTimeout?.();
+      p.kill("SIGKILL");
+    }, opts.timeoutMs ?? RUN_TIMEOUT_MS);
     p.stdout.on("data", (d) => (out += d));
     p.stderr.on("data", (d) => (out += d));
     p.on("error", (e) => {
@@ -256,10 +263,16 @@ export async function runNpmSandbox(tarball: Buffer, run: number): Promise<Dynam
   fs.writeFileSync(path.join(inDir, "hook.js"), HOOK_JS);
   fs.writeFileSync(path.join(inDir, "run.sh"), RUNNER_SH, { mode: 0o755 });
   const command = "docker run --network none (lifecycle scripts + require under strace)";
+  // Killing the docker CLI does not stop the container, so name it and kill it by name on timeout.
+  const name = `rb-sbx-${path.basename(dir).replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}`;
   try {
-    const res = await sh("docker", [
+    const res = await sh(
+      "docker",
+      [
       "run",
       "--rm",
+      "--name",
+      name,
       "--network",
       "none",
       "--memory",
@@ -287,7 +300,9 @@ export async function runNpmSandbox(tarball: Buffer, run: number): Promise<Dynam
       SANDBOX_IMAGE,
       "sh",
       "/rb/run.sh",
-    ]);
+      ],
+      { onTimeout: () => spawn("docker", ["kill", name], { stdio: "ignore" }) },
+    );
     const files: Record<string, string> = {};
     for (const f of fs.readdirSync(outDir)) files[f] = fs.readFileSync(path.join(outDir, f), "utf8");
     return {

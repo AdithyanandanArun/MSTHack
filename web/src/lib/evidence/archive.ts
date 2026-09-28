@@ -2,10 +2,12 @@ import crypto from "node:crypto";
 import zlib from "node:zlib";
 import { Readable } from "node:stream";
 import tar from "tar-stream";
-import { decompress as zstdDecompress } from "fzstd";
+import { Decompress as ZstdDecompress } from "fzstd";
 import type { ArtifactFile } from "./types";
 
 export const MAX_ARTIFACT_BYTES = 150 * 1024 * 1024;
+/** Bound on decompressed size: archives are untrusted (uploads), so no decompression bombs. */
+export const MAX_UNPACKED_BYTES = 512 * 1024 * 1024;
 const MAX_TEXT_FILE = 1024 * 1024;
 const MAX_TOTAL_TEXT = 40 * 1024 * 1024;
 const MAX_ENTRIES = 50_000;
@@ -14,16 +16,30 @@ export const sha256Hex = (buf: Buffer | Uint8Array) => crypto.createHash("sha256
 
 export function decompress(buf: Buffer): Buffer {
   // gzip
-  if (buf[0] === 0x1f && buf[1] === 0x8b) return zlib.gunzipSync(buf, { maxOutputLength: MAX_ARTIFACT_BYTES * 4 });
+  if (buf[0] === 0x1f && buf[1] === 0x8b) return zlib.gunzipSync(buf, { maxOutputLength: MAX_UNPACKED_BYTES });
   // zstd frame magic 28 B5 2F FD
-  if (buf[0] === 0x28 && buf[1] === 0xb5 && buf[2] === 0x2f && buf[3] === 0xfd) {
-    return Buffer.from(zstdDecompress(new Uint8Array(buf)));
-  }
+  if (buf[0] === 0x28 && buf[1] === 0xb5 && buf[2] === 0x2f && buf[3] === 0xfd) return zstdBounded(buf, MAX_UNPACKED_BYTES);
   // xz (older Arch packages) is not supported without a native binding.
   if (buf[0] === 0xfd && buf[1] === 0x37 && buf[2] === 0x7a) {
     throw new Error("xz-compressed packages are not supported yet (use a .zst or .tgz artifact)");
   }
   return buf; // assume plain tar
+}
+
+/** Streaming zstd decode that aborts as soon as output exceeds `max` bytes. */
+export function zstdBounded(buf: Buffer, max: number): Buffer {
+  const out: Uint8Array[] = [];
+  let total = 0;
+  const d = new ZstdDecompress((chunk) => {
+    total += chunk.length;
+    if (total > max) throw new Error(`archive expands beyond ${max} bytes`);
+    out.push(chunk);
+  });
+  const STEP = 64 * 1024;
+  for (let i = 0; i < buf.length; i += STEP) {
+    d.push(new Uint8Array(buf.subarray(i, Math.min(buf.length, i + STEP))), i + STEP >= buf.length);
+  }
+  return Buffer.concat(out);
 }
 
 function looksBinary(buf: Buffer): boolean {

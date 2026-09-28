@@ -128,7 +128,10 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
     uint256 public roomCount;
     mapping(uint256 roomId => Room) private _rooms;
     mapping(uint256 roomId => Commitment[]) private _commitments;
-    mapping(bytes32 artifactHash => uint256 roomId) public activeRoomForArtifact;
+    /// One active room per (artifact, funder). Scoping by funder means a third
+    /// party cannot block a developer from funding their own release by
+    /// opening a dust-sized room on the same artifact first.
+    mapping(bytes32 artifactHash => mapping(address developer => uint256 roomId)) public activeRoomForArtifact;
     mapping(bytes32 commitment => bool) public commitmentUsed;
     mapping(address => bool) public isModerator;
     mapping(address => uint256) public pendingWithdrawals;
@@ -233,7 +236,7 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
         if (!isModerator[p.moderator]) revert NotModerator();
         if (p.moderator == msg.sender) revert ConflictOfInterest();
 
-        uint256 existing = activeRoomForArtifact[p.artifactHash];
+        uint256 existing = activeRoomForArtifact[p.artifactHash][msg.sender];
         if (existing != 0) revert ArtifactHasActiveRoom(existing);
 
         roomId = ++roomCount;
@@ -256,7 +259,7 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
         r.packageName = p.packageName;
         r.version = p.version;
 
-        activeRoomForArtifact[p.artifactHash] = roomId;
+        activeRoomForArtifact[p.artifactHash][msg.sender] = roomId;
 
         emit RoomCreated(
             roomId,
@@ -370,7 +373,7 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
 
         r.status = Status.Settled;
         r.adjudicationHash = adjudicationHash;
-        delete activeRoomForArtifact[r.artifactHash];
+        delete activeRoomForArtifact[r.artifactHash][r.developer];
 
         _payDiscoveries(roomId, discoveries);
         _payReviews(roomId, reviews);
@@ -478,7 +481,7 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
 
     function _refund(Room storage r, uint256 roomId, string memory reason) private {
         r.status = Status.Refunded;
-        delete activeRoomForArtifact[r.artifactHash];
+        delete activeRoomForArtifact[r.artifactHash][r.developer];
         pendingWithdrawals[r.developer] += r.bounty;
         emit RoomRefunded(roomId, r.developer, r.bounty, reason);
     }
