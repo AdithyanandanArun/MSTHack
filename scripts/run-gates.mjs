@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const checks = ["check-contracts", "check-mst-testnet", "check-web-unit", "check-web-build", "check-e2e", "check-sandbox", "check-pacman", "check-explorer", "check-backup", "check-repo"];
+const checks = ["check-contracts", "check-mst-testnet", "check-web-unit", "check-web-build", "check-e2e", "check-sandbox", "check-pacman", "check-explorer", "check-backup", "check-verify-payload", "check-repo"];
 let failed = 0;
 for (const c of checks) {
   const t0 = Date.now();

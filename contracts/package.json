@@ -7,7 +7,8 @@
     "export": "hardhat compile && node scripts/export-abi.js",
     "node": "hardhat node",
     "deploy:local": "hardhat run scripts/deploy.js --network localhost",
-    "deploy:mst": "hardhat run scripts/deploy.js --network mstTestnet"
+    "deploy:mst": "hardhat run scripts/deploy.js --network mstTestnet",
+    "verify:mst": "node scripts/verify-blockscout.js"
   },
   "license": "MIT",
   "description": "ReleaseBond escrow, commitment and settlement contract for MST",
