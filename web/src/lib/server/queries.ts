@@ -269,3 +269,24 @@ export function evidenceRun(id: number) {
     | { id: number; room_id: number; finding_id: number | null; requested_by: string; status: string; outcome: string | null; report_json: string | null; report_hash: string | null; error: string | null; created_at: number; finished_at: number | null }
     | undefined;
 }
+
+/** Artifact in the shape the UI's ArtifactCard renders. */
+export function getArtifactRow(sha256: string) {
+  const row = db()
+    .prepare("SELECT sha256, ecosystem, name, version, source_url, size, metadata_json, diff_json, scan_json FROM artifacts WHERE sha256 = ?")
+    .get(sha256.replace(/^0x/, "").toLowerCase()) as
+    | { sha256: string; ecosystem: string; name: string; version: string; source_url: string | null; size: number; metadata_json: string; diff_json: string | null; scan_json: string | null }
+    | undefined;
+  if (!row) return null;
+  return {
+    sha256: row.sha256,
+    ecosystem: row.ecosystem,
+    name: row.name,
+    version: row.version,
+    sourceUrl: row.source_url,
+    size: row.size,
+    metadata: JSON.parse(row.metadata_json),
+    diff: row.diff_json ? (JSON.parse(row.diff_json) as DiffSummary) : null,
+    scan: row.scan_json ? (JSON.parse(row.scan_json) as Fact[]) : [],
+  };
+}
