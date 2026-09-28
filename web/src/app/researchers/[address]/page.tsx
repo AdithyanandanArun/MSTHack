@@ -6,6 +6,8 @@ import type { CommentKind } from "@/lib/phase";
 import { appConfig, chainNow } from "@/lib/server/config";
 import { db } from "@/lib/server/db";
 import { statsOf } from "@/lib/server/onchain";
+import { developerHistory } from "@/lib/server/history";
+import { ReviewList } from "@/components/ReviewHistory";
 import { canView, currentViewer, getRoom, getUser, isModerator, type FindingRow } from "@/lib/server/queries";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +21,7 @@ export default async function ResearcherPage({ params }: { params: Promise<{ add
   const viewer = await currentViewer();
   const now = await chainNow();
   const stats = await statsOf(address);
+  const dev = developerHistory(address, now);
   const d = db();
   const findings = (d.prepare("SELECT * FROM findings WHERE author = ? AND status = 'committed' ORDER BY id DESC").all(address) as FindingRow[]).filter((f) => {
     const room = getRoom(f.room_id);
@@ -70,6 +73,28 @@ export default async function ResearcherPage({ params }: { params: Promise<{ add
             <p className="p-4 muted">Contract not configured.</p>
           )}
         </section>
+
+        {dev.releasesFunded > 0 && (
+          <section className="card">
+            <div className="card-header">
+              <h2 className="font-semibold">Review track record (as a developer)</h2>
+              <span className="text-xs muted">historical evidence, not a guarantee</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 p-4 text-sm sm:grid-cols-4">
+              <Stat label="Releases funded" value={dev.releasesFunded} />
+              <Stat label="Reviews completed" value={dev.releasesReviewed} />
+              <Stat label="Security pools funded" value={mstc(dev.poolsFundedWei)} />
+              <Stat label="Accepted findings" value={dev.acceptedFindings.total} />
+              <Stat label="Critical" value={dev.acceptedFindings.bySeverity.critical} />
+              <Stat label="High" value={dev.acceptedFindings.bySeverity.high} />
+              <Stat
+                label="Followed by a newer reviewed release"
+                value={`${dev.releasesWithFindingsFollowedByNewerReview.count}/${dev.releasesWithFindingsFollowedByNewerReview.of}`}
+              />
+            </div>
+            <ReviewList reviews={dev.reviews} now={now} withPackage />
+          </section>
+        )}
 
         <section className="card">
           <div className="card-header"><h2 className="font-semibold">Peer-review activity</h2></div>

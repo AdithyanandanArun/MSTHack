@@ -67,7 +67,9 @@ export default async function RoomPage({ params, searchParams }: { params: Promi
           </div>
           <h1 className="flex flex-wrap items-center gap-2 text-2xl">
             <span className="label mono" style={{ borderColor: "var(--border)" }}>{room.ecosystem}</span>
-            <span className="font-semibold">{room.package_name}</span>
+            <Link href={`/packages/${room.ecosystem}/${room.package_name}`} className="font-semibold" style={{ color: "var(--fg)" }} title="Release security history">
+              {room.package_name}
+            </Link>
             <span className="muted">@{room.version}</span>
           </h1>
           {room.title && <p className="mt-1">{room.title}</p>}
