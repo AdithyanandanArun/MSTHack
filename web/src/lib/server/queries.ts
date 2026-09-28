@@ -105,14 +105,9 @@ export interface AttachmentRow {
   created_at: number;
 }
 
-export class HttpError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+import { HttpError } from "./httpError";
+
+export { HttpError };
 
 export async function currentViewer(): Promise<Viewer & { user: UserRow | null }> {
   const address = await sessionAddress();

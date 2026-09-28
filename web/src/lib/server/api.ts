@@ -2,7 +2,8 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { AuthError } from "./auth";
-import { HttpError } from "./queries";
+import { HttpError } from "./httpError";
+import { RateLimitError } from "./rateLimit";
 
 /** JSON.stringify that turns bigints into decimal strings. */
 export function json(data: unknown, status = 200): NextResponse {
@@ -20,6 +21,11 @@ export function route<C>(fn: Handler<C>): Handler<C> {
       return await fn(req, ctx);
     } catch (e) {
       if (e instanceof AuthError) return json({ error: e.message }, 401);
+      if (e instanceof RateLimitError) {
+        const res = json({ error: e.message, retryAfter: e.retryAfterSec }, 429);
+        res.headers.set("retry-after", String(e.retryAfterSec));
+        return res;
+      }
       if (e instanceof HttpError) return json({ error: e.message }, e.status);
       if (e instanceof ZodError) {
         return json({ error: e.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ") }, 400);

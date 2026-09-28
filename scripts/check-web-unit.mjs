@@ -26,6 +26,9 @@ const required = [
   "stays silent on the benign control package (negative control)",
   "respects the contract's review caps and excludes conflicted reviewers",
   "keeps findings private to their author during the hunt",
+  "allows the budget within a window then blocks with a retry-after",
+  "isolates keys so one wallet cannot spend another's budget",
+  "resets after the window elapses",
 ];
 for (const n of required) if (!names.includes(n)) fail(`required test did not pass: ${n}`);
 if (r.numPassedTests < 25) fail(`only ${r.numPassedTests} passing`);
