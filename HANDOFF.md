@@ -44,10 +44,10 @@ Run `npm run gates` to re-verify everything. Expected: 8 × PASS. G5/G6 need Doc
 4. **npm dependencies are not installed inside the sandbox** (it has no network by design). Only the package's own lifecycle hooks and `require()` run. Next step: pre-fetch the dependency tree into an offline cache that is mounted read-only.
 5. **pacman dynamic sandbox**: pacman gets static analysis only (`.PKGINFO`, `.INSTALL` hooks, setuid bits, FHS locations). Next step: an `archlinux` container that sources `.INSTALL` and runs `post_install` under strace. Old `.pkg.tar.xz` archives are rejected (there is no pure-JS xz decoder wired in).
 6. **Identity**: "verified human" is a moderator-granted badge (`/admin`). A room can now **require verified researchers** (checkbox when funding; enforced when reports are submitted; `rooms.require_verified`). The contract still accepts any commitment, but an unverified commitment has no report to review or pay. Which identity provider backs the badge is still an open decision (spec §8, §46).
-7. **Governance**: one moderator per room, chosen by the developer from the on-chain registry. **Appeals exist:** the author or developer can appeal a verdict once, a *different* registered moderator decides, settlement is blocked while an appeal is open, and the decision is part of the hashed adjudication record. Multi-moderator panels for high-value rooms are still open (spec §20, §33).
-8. **Hardening before a public deployment**: rate limits on every write endpoint (`web/src/lib/server/rateLimit.ts`: per wallet, plus per IP behind `RELEASEBOND_TRUST_PROXY=1`, `429` + `Retry-After`) and a per-wallet upload quota are **done**. The limiter is in-memory, so move it to Redis if you run several instances. Still needed: a persistent `SESSION_SECRET` and backups of `web/data/`. **Reports and threads exist only in that SQLite file plus uploads.** The chain holds only their hashes. Consider encrypted report storage (e.g. IPFS with keys released at disclosure).
+7. **Governance**: one moderator per room, chosen by the developer from the on-chain registry. **Appeals exist:** the author or developer can appeal a verdict once, a *different* registered moderator decides, and settlement is blocked while an appeal is open. **Moderator panels exist** (contract-enforced): a room can name up to 5 co-moderators and a quorum, and `finalizeSettlement` then requires EIP-712 signatures from a quorum over the exact award arrays (`hashAwards`/`settlementDigest`), so the room moderator cannot change amounts after approval. Panelists approve from the settlement tab.
+8. **Hardening**: done — per-wallet rate limits on every write endpoint (sign-in is limited per claimed wallet plus a high global nonce cap, never one shared bucket), per-wallet upload quota, and `npm run backup` / `npm run restore` (consistent SQLite snapshot plus files, sha256 manifest, verified staged restore that rewrites absolute paths). The session secret is already persistent (`data/session.secret`, mode 600, included in backups) unless you set `SESSION_SECRET`. The limiter is in-memory, so move it to Redis for several instances.
 9. The researcher's reveal **nonce is stored server-side** (plus a localStorage backup in the browser), trading some trust for recoverability. The alternative is client-only storage with an export or backup UX.
-10. Explorer link formats (`/tx/`, `/address/` on testnet.mstscan.com) are assumed; confirm them.
+10. Explorer links are verified: testnet.mstscan.com is Blockscout, and `/tx/<hash>` and `/address/<addr>` resolve (`scripts/check-explorer.mjs`). Blockscout also has a contract-verification API; publishing the ReleaseBond source there after G9 is a nice next step.
 
 ## Traps already found (don't repeat them)
 
@@ -59,6 +59,9 @@ Run `npm run gates` to re-verify everything. Expected: 8 × PASS. G5/G6 need Doc
 - `vitest.config.mts` must stay ESM, and `server-only` is aliased to a stub for tests.
 - Don't `pkill -f "<pattern>"` when your own shell command line contains that pattern; it kills the shell.
 - `next start` sets NODE_ENV=production, which makes cookies `Secure`. Use HTTPS, or set `RELEASEBOND_INSECURE_COOKIES=1` for plain-http testing.
+
+- **EIP-712 immutables change the runtime code at deploy time.** Deployed code never equals the compiled `deployedBytecode`. Compare with the immutable ranges masked (`contracts/scripts/immutables.js`, `web/src/lib/chain/runtimeCode.ts`; the ranges are exported by `npm --prefix contracts run export`). An exact comparison rejects every genuine deployment.
+- A signed-out sign-in rate limit must never be one shared bucket, or one client can lock everyone out. Sign-in is limited per claimed wallet.
 
 ## Conventions
 

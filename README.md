@@ -11,6 +11,7 @@ ReleaseBond turns one exact software release (npm or pacman) into a funded, time
 - After the hunt, the developer and moderator see the reports first (private disclosure). Then each finding becomes a **GitHub-issue-style thread** where peers post typed responses: `REPRODUCED`, `REFUTED`, `ADDITIONAL EVIDENCE`, `DUPLICATE`, `SEVERITY CHALLENGE` and so on. Researchers can attach proof files and evidence runs.
 - A hybrid **Agent + Rule evidence engine** re-verifies the artifact hash, runs deterministic static rules and repeated no-network Docker sandbox runs, and has an agent (Claude, or a heuristic fallback) challenge the claim. The agent can never mark anything valid.
 - The room's moderator records public verdicts. The server freezes a canonical adjudication record, and the moderator signs `finalizeSettlement` with that record's hash. The **contract** enforces the payout rules: only revealed commitments can win discovery awards, review awards are capped, and any remainder goes back to the developer.
+- High-value rooms can name a **moderator panel**: settlement then needs EIP-712 signatures from a quorum of co-moderators over the exact awards, enforced by the contract. Verdicts can be **appealed** once to a different moderator, and rooms can accept **verified researchers only**.
 - Every wallet accumulates on-chain reputation (`statsOf`): valid, duplicate, critical and high findings, review awards, rejected reports, and total earned.
 
 The full product spec lives in [`ReleaseBond_Complete_Project_Idea_Agent_Rule_Engine.md`](ReleaseBond_Complete_Project_Idea_Agent_Rule_Engine.md).
@@ -47,7 +48,7 @@ HANDOFF.md   notes for the next contributor/agent
 | Faucet | https://faucet.masterstroke.academy (10 MSTC) |
 | Wallet | [Bridgekey](https://chromewebstore.google.com/detail/bridgekey/bfjojdcfenehemjgjlepdjomkpginlkg) (EIP-6963 or `window.ethereum`) |
 
-Deploying the contract costs about 3.2M gas (≈0.0033 MSTC). `node scripts/check-mst-testnet.mjs` proves the compiled bytecode is accepted by the live chain.
+Deploying the contract costs about 4.3M gas (≈0.0043 MSTC). `node scripts/check-mst-testnet.mjs` proves the compiled bytecode is accepted by the live chain.
 
 ## Quick start
 
@@ -95,13 +96,15 @@ npm run gates     # runs every automated gate below
 
 | Gate | Check | What it proves |
 |---|---|---|
-| G1 | `scripts/check-contracts.mjs` | 21 contract tests: escrow, commit/reveal, settlement caps, refunds, access control |
+| G1 | `scripts/check-contracts.mjs` | 25 contract tests: escrow, commit/reveal, settlement caps, refunds, access control, moderator panels |
 | G2 | `scripts/check-mst-testnet.mjs` | live MST Testnet accepts the bytecode (chain ID and deploy gas estimate) |
-| G3 | `scripts/check-web-unit.mjs` | 41 unit tests: Solidity hash parity, rule positive/negative controls, sandbox parser, visibility, payout |
+| G3 | `scripts/check-web-unit.mjs` | 42 unit tests: Solidity hash parity, rule positive/negative controls, sandbox parser, visibility, payout |
 | G4 | `scripts/check-web-build.mjs` | typecheck + lint (0 warnings) + production build |
-| G5 | `scripts/check-e2e.mjs` | 81-check lifecycle (including verified-only rooms, appeals, rate limits and upload quota) on a fresh chain through the real HTTP API and production server |
+| G5 | `scripts/check-e2e.mjs` | 93-check lifecycle (including verified-only rooms, appeals, moderator panel approval, in-app deploy verification, rate limits and upload quota) on a fresh chain through the real HTTP API and production server |
 | G6 | `scripts/check-sandbox.mjs` | Docker sandbox sees key read, egress, secret env and install hook, and stays silent on the benign control |
 | G7 | `scripts/check-pacman.mjs` | real Arch package fetched, checksum-verified against the repo DB, normalized |
+| G18 | `scripts/check-explorer.mjs` | explorer links resolve on MST Testnet's Blockscout (positive and negative control) |
+| G19 | `scripts/check-backup.mjs` | backup restores byte-identical rows and files; tampered backup refused |
 | G8 | `scripts/check-repo.mjs` | history, no co-author trailers, pushed and clean |
 
 ## REST API (selected)
@@ -132,3 +135,9 @@ npm run gates     # runs every automated gate below
 ## Configuration
 
 See [`web/.env.example`](web/.env.example). Key variables: `RELEASEBOND_CHAIN`, `RELEASEBOND_RATE_LIMIT_SCALE` / `RELEASEBOND_TRUST_PROXY` / `RELEASEBOND_UPLOAD_QUOTA_BYTES` (abuse limits), `RELEASEBOND_CONTRACT_ADDRESS` + `RELEASEBOND_DEPLOY_BLOCK`, `RELEASEBOND_SANDBOX=docker`, `ANTHROPIC_API_KEY` (enables the Claude agent; model via `AGENT_MODEL`), `SESSION_SECRET`.
+
+## Backups
+
+Back up the default `web/data` directory with `npm run backup`; use `npm run backup -- --data /path/to/data --out /path/to/backups` for custom locations. Each timestamped backup contains an online SQLite snapshot, `session.secret`, release artifacts, proof uploads, and a SHA-256 manifest with database row counts.
+
+Restore to an empty data directory with `npm run restore -- /path/to/releasebond-backup --data /path/to/data`. Add `--force` to replace a non-empty target. Restore verifies the complete manifest before writing and updates stored artifact and attachment paths when the target location differs from the original data directory.
