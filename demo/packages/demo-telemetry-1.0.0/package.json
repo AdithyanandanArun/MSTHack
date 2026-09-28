@@ -1,0 +1,7 @@
+{
+  "name": "releasebond-demo-telemetry",
+  "version": "1.0.0",
+  "description": "ReleaseBond demo fixture: a harmless utility package (clean baseline release).",
+  "main": "index.js",
+  "license": "MIT"
+}

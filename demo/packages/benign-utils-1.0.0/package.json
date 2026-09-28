@@ -1,0 +1,7 @@
+{
+  "name": "releasebond-benign-utils",
+  "version": "1.0.0",
+  "description": "ReleaseBond negative-control fixture: pure functions, no install scripts, no I/O.",
+  "main": "index.js",
+  "license": "MIT"
+}
