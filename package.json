@@ -1,0 +1,16 @@
+{
+  "name": "releasebond",
+  "private": true,
+  "description": "Release-level security bounties and adversarial peer review on the MST blockchain",
+  "scripts": {
+    "setup": "npm --prefix contracts ci && npm --prefix web ci",
+    "dev": "npm --prefix web run dev",
+    "dev:local": "node scripts/dev-local.mjs",
+    "advance-time": "node scripts/advance-time.mjs",
+    "test": "npm --prefix contracts test && npm --prefix web test",
+    "e2e": "node scripts/check-e2e.mjs",
+    "gates": "node scripts/run-gates.mjs",
+    "deploy:mst": "npm --prefix contracts run deploy:mst"
+  },
+  "license": "MIT"
+}

@@ -52,6 +52,7 @@ function cleanup() {
 }
 process.on("exit", cleanup);
 process.on("SIGINT", () => process.exit(130));
+process.on("SIGTERM", () => process.exit(143));
 
 try {
   const rpcPort = await freePort();

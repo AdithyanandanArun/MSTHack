@@ -22,3 +22,5 @@ web/.next/
 web/next-env.d.ts
 web/data/
 web/*.tsbuildinfo
+web/data-local/
+contracts/deployments/localhost.json

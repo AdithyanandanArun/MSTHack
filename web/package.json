@@ -1,12 +1,14 @@
 {
-  "name": "web",
+  "name": "releasebond-web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint src test",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
