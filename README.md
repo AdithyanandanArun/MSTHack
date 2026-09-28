@@ -97,9 +97,9 @@ npm run gates     # runs every automated gate below
 |---|---|---|
 | G1 | `scripts/check-contracts.mjs` | 21 contract tests: escrow, commit/reveal, settlement caps, refunds, access control |
 | G2 | `scripts/check-mst-testnet.mjs` | live MST Testnet accepts the bytecode (chain ID and deploy gas estimate) |
-| G3 | `scripts/check-web-unit.mjs` | 34 unit tests: Solidity hash parity, rule positive/negative controls, sandbox parser, visibility, payout |
+| G3 | `scripts/check-web-unit.mjs` | 38 unit tests: Solidity hash parity, rule positive/negative controls, sandbox parser, visibility, payout |
 | G4 | `scripts/check-web-build.mjs` | typecheck + lint (0 warnings) + production build |
-| G5 | `scripts/check-e2e.mjs` | 61-check lifecycle on a fresh chain through the real HTTP API and production server |
+| G5 | `scripts/check-e2e.mjs` | 68-check lifecycle (including rate limits and upload quota) on a fresh chain through the real HTTP API and production server |
 | G6 | `scripts/check-sandbox.mjs` | Docker sandbox sees key read, egress, secret env and install hook, and stays silent on the benign control |
 | G7 | `scripts/check-pacman.mjs` | real Arch package fetched, checksum-verified against the repo DB, normalized |
 | G8 | `scripts/check-repo.mjs` | history, no co-author trailers, pushed and clean |
@@ -116,10 +116,11 @@ npm run gates     # runs every automated gate below
 | POST | `/api/rooms/:id/findings` | private report; the server recomputes and must match the client's hash and commitment |
 | GET | `/api/findings/:id` | report + thread (403 until the disclosure rules open it) |
 | POST | `/api/findings/:id/comments` | typed responses; allowed kinds depend on phase and role |
-| POST | `/api/findings/:id/reproduce` | evidence run (rules + sandbox ×3 + agent) |
+| POST | `/api/findings/:id/reproduce` | queues an evidence run (rules + sandbox ×3 + agent); returns `202 {id}` |
+| GET | `/api/evidence/:id` | run status (`queued`/`running`/`done`/`error`), queue position, report |
 | POST | `/api/findings/:id/adjudicate` | room moderator only |
 | GET/POST | `/api/rooms/:id/settlement` | preview / freeze the adjudication record and return `finalizeSettlement` args |
-| POST | `/api/rooms/:id/scan` | release triage (no researcher claim) |
+| POST | `/api/rooms/:id/scan` | queues a release triage (no researcher claim); returns `202 {id}` |
 | POST | `/api/uploads` | proof files; their sha256 is bound into the report hash |
 
 ## Trust model (what is and is not on-chain)
@@ -130,4 +131,4 @@ npm run gates     # runs every automated gate below
 
 ## Configuration
 
-See [`web/.env.example`](web/.env.example). Key variables: `RELEASEBOND_CHAIN`, `RELEASEBOND_CONTRACT_ADDRESS` + `RELEASEBOND_DEPLOY_BLOCK`, `RELEASEBOND_SANDBOX=docker`, `ANTHROPIC_API_KEY` (enables the Claude agent; model via `AGENT_MODEL`), `SESSION_SECRET`.
+See [`web/.env.example`](web/.env.example). Key variables: `RELEASEBOND_CHAIN`, `RELEASEBOND_RATE_LIMIT_SCALE` / `RELEASEBOND_TRUST_PROXY` / `RELEASEBOND_UPLOAD_QUOTA_BYTES` (abuse limits), `RELEASEBOND_CONTRACT_ADDRESS` + `RELEASEBOND_DEPLOY_BLOCK`, `RELEASEBOND_SANDBOX=docker`, `ANTHROPIC_API_KEY` (enables the Claude agent; model via `AGENT_MODEL`), `SESSION_SECRET`.

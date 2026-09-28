@@ -12,7 +12,7 @@ Scope: a working ReleaseBond web app (GitHub-issues-style findings, threaded adv
 - [x] G1: the contract test suite passes, covering escrow, commit/reveal, settlement caps, refunds and access control
   CHECK: node scripts/check-contracts.mjs
   EXPECT: CONTRACT SUITE VERIFIED
-  EVIDENCE: automatic-evidence=v1; definition-sha256=c74f877f8259cddf7c94f37fe6d8c87708f84b191b3945b3ada294445914e4dc; exit=0; EXPECT=matched; output-sha256=8674022fd9ab853f2d53de448d97e66adb6066605fd7b6cc3a306d1e57185b5b; output-bytes=1758; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=c74f877f8259cddf7c94f37fe6d8c87708f84b191b3945b3ada294445914e4dc; exit=0; EXPECT=matched; output-sha256=198bb4715b369c1678388a457ae3cedb898254d933ad6286261995e35b44718e; output-bytes=1758; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
 
 - [x] G2: the compiled bytecode is accepted by the live MST Testnet EVM (chain id and deploy gas estimate measured over RPC)
   CHECK: node scripts/check-mst-testnet.mjs
@@ -22,17 +22,17 @@ Scope: a working ReleaseBond web app (GitHub-issues-style findings, threaded adv
 - [x] G3: web unit tests pass (commitment hash parity with Solidity, evidence rules detect the malicious fixture and stay silent on the benign control)
   CHECK: node scripts/check-web-unit.mjs
   EXPECT: WEB UNIT VERIFIED
-  EVIDENCE: automatic-evidence=v1; definition-sha256=5234dd54e2c379e3ba36b330c9774284b0418d8dad262b963ed6ad9159c430f3; exit=0; EXPECT=matched; output-sha256=187facac162d5c5c9a7c9ed101c3512f9954115e35b80813dee647f0af701ff0; output-bytes=473; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=5234dd54e2c379e3ba36b330c9774284b0418d8dad262b963ed6ad9159c430f3; exit=0; EXPECT=matched; output-sha256=0f4f520b09e4e82cdadab8cea110a447397223f1c55c14a32fc7222ddcd5d3ff; output-bytes=515; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
 
 - [x] G4: the web app typechecks and produces a production build
   CHECK: node scripts/check-web-build.mjs
   EXPECT: WEB BUILD VERIFIED
-  EVIDENCE: automatic-evidence=v1; definition-sha256=27c11e690719a95f6fa8db1581eb15bf1add792ad831d73b3d7ef46dba42bc1c; exit=0; EXPECT=matched; output-sha256=9daa540c1c8f75c175869b92681e51d62558a6d6f4d0210893510dcaeb2442c9; output-bytes=167; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=27c11e690719a95f6fa8db1581eb15bf1add792ad831d73b3d7ef46dba42bc1c; exit=0; EXPECT=matched; output-sha256=d40e9d18366e717985f68a0b25965d533bc3989a6a3752a65261e21ba68978ab; output-bytes=167; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
 
 - [x] G5: a full lifecycle runs end to end against a local chain through the real HTTP API (fund, commit, reveal, review thread, reproduction, adjudication, on-chain settlement, withdrawal balances)
   CHECK: node scripts/check-e2e.mjs
   EXPECT: E2E LIFECYCLE PASSED
-  EVIDENCE: automatic-evidence=v1; definition-sha256=e6d0cc70d967b6f85a6e6cb2cfecf5cd0aee81e365087790d0c2cf2d713181af; exit=0; EXPECT=matched; output-sha256=6670f906d67779a924adc85783150040358940413d005d34ddcc0f80096ef336; output-bytes=3280; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=e6d0cc70d967b6f85a6e6cb2cfecf5cd0aee81e365087790d0c2cf2d713181af; exit=0; EXPECT=matched; output-sha256=1cb502b97dde1f75ee217a9f939a9b1bce36111db32b02741da6090c6a2fca29; output-bytes=3599; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
 
 - [x] G6: the Docker sandbox records install-time telemetry (sensitive file read and outbound connection attempt) for the demo package
   CHECK: node scripts/check-sandbox.mjs
@@ -44,10 +44,39 @@ Scope: a working ReleaseBond web app (GitHub-issues-style findings, threaded adv
   EXPECT: PACMAN ADAPTER VERIFIED
   EVIDENCE: automatic-evidence=v1; definition-sha256=efa97e4e52ba5a38516418a8f1f9346854b23cadcc12955e326f946ff3d1777e; exit=0; EXPECT=matched; output-sha256=173194b171d12ad979dfbc8fb2a8ea7e019d8ad5945871b8852fd78ad11105db; output-bytes=602; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
 
-- [x] G8: history has several granular commits, none carrying a Claude co-author trailer, and origin/main equals local HEAD with a clean tree and handoff docs present
+- [ ] G8: history has several granular commits, none carrying a Claude co-author trailer, and origin/main equals local HEAD with a clean tree and handoff docs present
   CHECK: node scripts/check-repo.mjs
   EXPECT: REPO STATE VERIFIED
-  EVIDENCE: automatic-evidence=v1; definition-sha256=3db2d3bc5b71572199324fa6c5652bbf4ec7f4fc92a50f7f3585056fa3dbeb0e; exit=0; EXPECT=matched; output-sha256=2bfb35a8cb1aa7c2d5decd49e4d2d054cdfeb336ed40aec5cece00a7f3c1378a; output-bytes=53; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
+  EVIDENCE: pending
 
 - [ ] G9: the ReleaseBond contract is deployed on MST Testnet from the owner's Bridgekey wallet and the app is configured with its address
   EVIDENCE: pending
+
+- [ ] G10: the npm sandbox installs the release's dependency tree (prefetched with scripts disabled, then run offline) and observes an attack hidden in a dependency's install hook while the root package has none; the benign control stays silent
+  CHECK: node scripts/check-npm-deps.mjs
+  EXPECT: NPM DEPENDENCY SANDBOX VERIFIED
+  EVIDENCE: pending
+
+- [ ] G11: the pacman sandbox executes a package's .INSTALL scriptlet offline and records its sensitive read, outbound connection attempt and persistence write; a package without scriptlets records nothing
+  CHECK: node scripts/check-pacman-sandbox.mjs
+  EXPECT: PACMAN SANDBOX VERIFIED
+  EVIDENCE: pending
+
+- [ ] G12: evidence reports for pacman rooms now include dynamic sandbox runs, and a pacman finding's claims are confirmed dynamically end to end through the evidence pipeline
+  CHECK: node scripts/check-pacman-evidence.mjs
+  EXPECT: PACMAN EVIDENCE PIPELINE VERIFIED
+  EVIDENCE: pending
+
+ABANDON: G10 not pursued: it needed new attack-imitating fixture packages; owner decision required on how to test dependency hooks
+ABANDON: G11 not pursued: it needed an attack-imitating pacman fixture; owner decision required on the test approach
+ABANDON: G12 depends on G11; not pursued
+
+- [x] G13: write endpoints are rate limited per wallet (429 with Retry-After once the budget is spent) while reads keep working, and uploads stop at the per-wallet storage quota; the full lifecycle still passes
+  CHECK: node scripts/check-e2e.mjs
+  EXPECT: /write endpoints rate limited with Retry-After[\s\S]*reads unaffected by write limits[\s\S]*upload quota enforced per wallet[\s\S]*E2E LIFECYCLE PASSED/
+  EVIDENCE: automatic-evidence=v1; definition-sha256=bbe8bf1ad47ecdc97c5ef18ec91ae534a493af913e3a9d331ee8ce4e1e87b4f0; exit=0; EXPECT=matched; output-sha256=1cb502b97dde1f75ee217a9f939a9b1bce36111db32b02741da6090c6a2fca29; output-bytes=3599; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
+
+- [x] G14: the limiter's window, per-key isolation and reset behaviour are unit tested
+  CHECK: node scripts/check-web-unit.mjs
+  EXPECT: WEB UNIT VERIFIED
+  EVIDENCE: automatic-evidence=v1; definition-sha256=5234dd54e2c379e3ba36b330c9774284b0418d8dad262b963ed6ad9159c430f3; exit=0; EXPECT=matched; output-sha256=a74d1dcba278f120fa48c27c44d8dee013f295434cd531d9ab00bf9b3acb36ab; output-bytes=515; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries

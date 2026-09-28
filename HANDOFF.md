@@ -35,14 +35,17 @@ Run `npm run gates` to re-verify everything. Expected: 8 × PASS. G5/G6 need Doc
 
 ## Known gaps / recommended next steps (in priority order)
 
+> Dependency-tree execution in the npm sandbox (#4) and a pacman dynamic sandbox (#5) were scoped as GATES.md G10–G12 and then **abandoned without implementation**: testing them needed new fixture packages that imitate credential theft and persistence, and building those was stopped. The owner needs to decide on a test approach (for example, benign canary behaviour only) before anyone picks them up.
+
+
 1. **G9 deployment + Bridgekey click-through** (above).
 2. **Claude agent path not exercised by tests** (no API key in the build env). Set `ANTHROPIC_API_KEY` and run a reproduction. The default model is `claude-sonnet-5`, overridable with `AGENT_MODEL`. The heuristic analyst runs whenever no key is set, and it is labelled as such in the UI.
-3. **Evidence runs are synchronous HTTP requests** (about 3–10 s each with Docker). For production, move them to a job queue and poll `/api/evidence/:id`.
+3. ~~Evidence runs are synchronous HTTP requests~~ **Done:** runs are queued in `web/src/lib/server/evidenceQueue.ts` (the `evidence_runs` table is the queue, with `RELEASEBOND_EVIDENCE_CONCURRENCY` runs at a time, default 2). The API returns `202 {id}`, clients poll `GET /api/evidence/:id`, and runs interrupted by a restart are marked as errors. It is still in-process, so for multi-instance deployments move it to a real worker (e.g. BullMQ or a separate process polling the same table).
 4. **npm dependencies are not installed inside the sandbox** (it has no network by design). Only the package's own lifecycle hooks and `require()` run. Next step: pre-fetch the dependency tree into an offline cache that is mounted read-only.
 5. **pacman dynamic sandbox**: pacman gets static analysis only (`.PKGINFO`, `.INSTALL` hooks, setuid bits, FHS locations). Next step: an `archlinux` container that sources `.INSTALL` and runs `post_install` under strace. Old `.pkg.tar.xz` archives are rejected (there is no pure-JS xz decoder wired in).
 6. **Identity**: "verified human" is a moderator-granted badge (`/admin`) and is not enforced anywhere. The provider is an open decision (spec §8, §46).
 7. **Governance**: one moderator per room, chosen by the developer from the on-chain registry. There are no appeals or multi-moderator panels yet (spec §20, §33).
-8. **Hardening before a public deployment**: rate limiting (only "one evidence run per user at a time" exists), upload quotas, a persistent `SESSION_SECRET`, and backups of `web/data/`. **Reports and threads exist only in that SQLite file plus uploads.** The chain holds only their hashes. Consider encrypted report storage (e.g. IPFS with keys released at disclosure).
+8. **Hardening before a public deployment**: rate limits on every write endpoint (`web/src/lib/server/rateLimit.ts`: per wallet, plus per IP behind `RELEASEBOND_TRUST_PROXY=1`, `429` + `Retry-After`) and a per-wallet upload quota are **done**. The limiter is in-memory, so move it to Redis if you run several instances. Still needed: a persistent `SESSION_SECRET` and backups of `web/data/`. **Reports and threads exist only in that SQLite file plus uploads.** The chain holds only their hashes. Consider encrypted report storage (e.g. IPFS with keys released at disclosure).
 9. The researcher's reveal **nonce is stored server-side** (plus a localStorage backup in the browser), trading some trust for recoverability. The alternative is client-only storage with an export or backup UX.
 10. Explorer link formats (`/tx/`, `/address/` on testnet.mstscan.com) are assumed; confirm them.
 
