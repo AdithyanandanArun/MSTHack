@@ -97,9 +97,9 @@ npm run gates     # runs every automated gate below
 |---|---|---|
 | G1 | `scripts/check-contracts.mjs` | 21 contract tests: escrow, commit/reveal, settlement caps, refunds, access control |
 | G2 | `scripts/check-mst-testnet.mjs` | live MST Testnet accepts the bytecode (chain ID and deploy gas estimate) |
-| G3 | `scripts/check-web-unit.mjs` | 38 unit tests: Solidity hash parity, rule positive/negative controls, sandbox parser, visibility, payout |
+| G3 | `scripts/check-web-unit.mjs` | 41 unit tests: Solidity hash parity, rule positive/negative controls, sandbox parser, visibility, payout |
 | G4 | `scripts/check-web-build.mjs` | typecheck + lint (0 warnings) + production build |
-| G5 | `scripts/check-e2e.mjs` | 68-check lifecycle (including rate limits and upload quota) on a fresh chain through the real HTTP API and production server |
+| G5 | `scripts/check-e2e.mjs` | 81-check lifecycle (including verified-only rooms, appeals, rate limits and upload quota) on a fresh chain through the real HTTP API and production server |
 | G6 | `scripts/check-sandbox.mjs` | Docker sandbox sees key read, egress, secret env and install hook, and stays silent on the benign control |
 | G7 | `scripts/check-pacman.mjs` | real Arch package fetched, checksum-verified against the repo DB, normalized |
 | G8 | `scripts/check-repo.mjs` | history, no co-author trailers, pushed and clean |
