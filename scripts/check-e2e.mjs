@@ -94,6 +94,8 @@ try {
       RELEASEBOND_INSECURE_COOKIES: "1",
       RELEASEBOND_SANDBOX: docker ? "docker" : "off",
       SESSION_SECRET: "e2e-secret-e2e-secret-e2e-secret",
+      RELEASEBOND_RATE_LIMIT_SCALE: "0.5",
+      RELEASEBOND_UPLOAD_QUOTA_BYTES: "1000000",
       ANTHROPIC_API_KEY: "",
     },
   });

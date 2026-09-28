@@ -115,6 +115,17 @@ class Actor {
   }
 }
 
+/** Polls a background evidence run until it is done. */
+async function waitRun<R>(who: Actor, id: number): Promise<{ id: number; report: R }> {
+  for (let i = 0; i < 600; i++) {
+    const s = await who.ok<{ id: number; status: string; error: string | null; report: R | null }>("GET", `/api/evidence/${id}`);
+    if (s.status === "done") return { id: s.id, report: s.report! };
+    if (s.status === "error") throw new Error(`evidence run #${id} failed: ${s.error}`);
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  throw new Error(`evidence run #${id} did not finish`);
+}
+
 async function advance(seconds: number, anyone: Actor) {
   await test.increaseTime({ seconds });
   await test.mine({ blocks: 1 });
@@ -262,14 +273,19 @@ async function main() {
   const proof = await bob.req<string>("GET", `/api/uploads/${att.id}`, undefined, true);
   assert(proof.status === 200 && proof.data.includes("demo_key"), "review: proof files readable");
 
-  const run = await bob.ok<{ id: number; report: { outcome: string; claims: { observation: string; result: string }[]; environment: string; agent: { mode: string } } }>(
-    "POST",
-    `/api/findings/${aliceF.id}/reproduce`,
-  );
+  type Report = { outcome: string; claims: { observation: string; result: string }[]; environment: string; agent: { mode: string } };
+  const t0 = Date.now();
+  const queued = await bob.req<{ id: number; status: string }>("POST", `/api/findings/${aliceF.id}/reproduce`);
+  assert(queued.status === 202 && ["queued", "running"].includes(queued.data.status), "reproduction is queued, not run inside the request");
+  assert(Date.now() - t0 < 2_000, "queuing returns immediately");
+  const dupRun = await bob.req("POST", `/api/findings/${aliceF.id}/reproduce`);
+  assert(dupRun.status === 429, "one pending evidence run per researcher");
+  const run = await waitRun<Report>(bob, queued.data.id);
   console.log(`    evidence: ${run.report.environment}; outcome ${run.report.outcome}; agent ${run.report.agent.mode}`);
   assert(run.report.outcome === "REPRODUCED", "evidence engine reproduces alice's claims");
   assert(run.report.claims.every((c) => c.result === "confirmed"), "every claimed observation confirmed");
-  const vsCarol = await bob.ok<{ id: number; report: { outcome: string } }>("POST", `/api/findings/${carolF.id}/reproduce`);
+  const carolQueued = await bob.ok<{ id: number }>("POST", `/api/findings/${carolF.id}/reproduce`);
+  const vsCarol = await waitRun<Report>(bob, carolQueued.id);
   assert(vsCarol.report.outcome === "NOT_REPRODUCED", "carol's persistence claim is not reproduced");
 
   const repro = await bob.ok<{ id: number }>("POST", `/api/findings/${aliceF.id}/comments`, { kind: "REPRODUCED", body: "Reproduced in 3 fresh sandboxes.", evidenceRunId: run.id });
@@ -355,6 +371,29 @@ async function main() {
     const r = await anon.req<string>("GET", p, undefined, true);
     assert(r.status === 200 && r.data.includes(needle), `page ${p} renders`);
   }
+
+  console.log("• abuse limits");
+  let limited: Response | null = null;
+  for (let i = 0; i < 100 && !limited; i++) {
+    const r = await fetch(`${BASE}/api/votes`, {
+      method: "POST",
+      headers: { cookie: dave.cookie, "content-type": "application/json" },
+      body: JSON.stringify({ targetType: "finding", targetId: aliceF.id }),
+    });
+    if (r.status === 429) limited = r;
+    else if (r.status !== 200) throw new Error(`vote returned ${r.status}`);
+  }
+  assert(limited && Number(limited.headers.get("retry-after")) > 0, "write endpoints rate limited with Retry-After");
+  assert((await dave.req("GET", `/api/findings/${aliceF.id}`)).status === 200, "reads unaffected by write limits");
+  const blob = () => {
+    const f = new FormData();
+    f.set("file", new Blob([Buffer.alloc(600_000, 97)]), "big-log.txt");
+    return f;
+  };
+  assert((await carol.req("POST", "/api/uploads", blob())).status === 201, "upload within quota accepted");
+  const overQuota = await carol.req("POST", "/api/uploads", blob());
+  const otherWallet = await dave.req("POST", "/api/uploads", blob());
+  assert(overQuota.status === 413 && otherWallet.status === 201, "upload quota enforced per wallet");
 
   console.log(`\nE2E LIFECYCLE PASSED (${checks} checks)`);
 }
