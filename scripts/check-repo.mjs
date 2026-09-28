@@ -33,7 +33,7 @@ for (const [file, needles] of [
 // GATES.md is rewritten by the gate checker itself while it records evidence.
 const dirty = git("status", "--porcelain")
   .split("\n")
-  .filter((l) => l && !/^ M GATES\.md$/.test(l))
+  .filter((l) => l && !/^\s*M\s+GATES\.md$/.test(l))
   .join("\n");
 if (dirty) fail(`working tree not clean:\n${dirty}`);
 git("fetch", "--quiet", "origin", "main");
