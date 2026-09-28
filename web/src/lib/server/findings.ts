@@ -12,6 +12,7 @@ import {
   type Severity,
 } from "@/lib/canonical";
 import { canDecideAppeal, canFileAppeal } from "@/lib/appeals";
+import { unresolvedObjections } from "./moderation";
 import { planSettlement, type AdjudicatedFinding } from "@/lib/payout";
 import { allowedCommentKinds, COMMENT_KINDS, phaseOf, type Viewer } from "@/lib/phase";
 import { appConfig, chainNow } from "./config";
@@ -263,6 +264,7 @@ export async function findingDetail(findingId: number, viewer: Viewer) {
       votedByMe: fVotes.mine,
     },
     appeal: appeal ? publicAppeal(appeal) : null,
+    unresolvedObjections: unresolvedObjections(f.id),
     comments: comments.map((c) => ({
       id: c.id,
       parentId: c.parent_id,
@@ -416,8 +418,10 @@ export async function createAppeal(findingId: number, appellant: string, input: 
   }
 
   const result = db()
-    .prepare("INSERT OR IGNORE INTO appeals(finding_id, appellant, reason, created_at) VALUES(?, ?, ?, ?)")
-    .run(finding.id, appellant.toLowerCase(), input.reason, nowSec());
+    .prepare(
+      "INSERT OR IGNORE INTO appeals(finding_id, appellant, reason, original_verdict, original_severity, created_at) VALUES(?, ?, ?, ?, ?, ?)",
+    )
+    .run(finding.id, appellant.toLowerCase(), input.reason, finding.verdict, finding.final_severity, nowSec());
   if (result.changes !== 1) throw new HttpError(409, "an appeal has already been filed for this finding");
   return { id: Number(result.lastInsertRowid) };
 }

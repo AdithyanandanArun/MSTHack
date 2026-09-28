@@ -86,6 +86,7 @@ export interface FindingDetail {
     decidedAt: number | null;
   } | null;
   comments: Comment[];
+  unresolvedObjections: number;
   evidenceRuns: Record<string, { id: number; status: string; outcome: string | null; reportHash: string | null; report: EvidenceReport | null } | null>;
   viewer: {
     address: string | null;
@@ -381,6 +382,7 @@ export function FindingThread({ d, now, explorer }: { d: FindingDetail; now: num
             <div className="grid grid-cols-2 gap-1">
               <span>Reproduced</span><b style={{ color: "var(--success)" }}>{(counts.REPRODUCED ?? 0) + (counts.PARTIALLY_REPRODUCED ?? 0)}</b>
               <span>Refutations</span><b style={{ color: "var(--danger)" }}>{counts.REFUTED ?? 0}</b>
+              <span>Unresolved objections</span><b style={{ color: d.unresolvedObjections ? "var(--attention)" : undefined }}>{d.unresolvedObjections}</b>
               <span>Evidence</span><b>{counts.ADDITIONAL_EVIDENCE ?? 0}</b>
               <span>Severity challenges</span><b>{counts.SEVERITY_CHALLENGE ?? 0}</b>
               <span>Upvotes</span><b>{f.votes}</b>

@@ -241,6 +241,9 @@ function migrate(conn: Database.Database) {
   // Off-chain room policy: only moderator-verified researchers may submit reports.
   add("rooms", "require_verified", "INTEGER NOT NULL DEFAULT 0");
   add("room_drafts", "require_verified", "INTEGER NOT NULL DEFAULT 0");
+  // The verdict an appeal contested (an overturn overwrites the finding's verdict).
+  add("appeals", "original_verdict", "TEXT");
+  add("appeals", "original_severity", "TEXT");
 }
 
 type GlobalWithDb = typeof globalThis & { __releasebondDb?: Database.Database };

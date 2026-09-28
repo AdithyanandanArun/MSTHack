@@ -7,6 +7,7 @@ import { appConfig, chainNow } from "@/lib/server/config";
 import { db } from "@/lib/server/db";
 import { statsOf } from "@/lib/server/onchain";
 import { developerHistory } from "@/lib/server/history";
+import { moderatorHistory, researcherAppealOutcomes } from "@/lib/server/moderation";
 import { ReviewList } from "@/components/ReviewHistory";
 import { canView, currentViewer, getRoom, getUser, isModerator, type FindingRow } from "@/lib/server/queries";
 
@@ -22,6 +23,8 @@ export default async function ResearcherPage({ params }: { params: Promise<{ add
   const now = await chainNow();
   const stats = await statsOf(address);
   const dev = developerHistory(address, now);
+  const mod = moderatorHistory(address, now);
+  const appeals = researcherAppealOutcomes(address);
   const d = db();
   const findings = (d.prepare("SELECT * FROM findings WHERE author = ? AND status = 'committed' ORDER BY id DESC").all(address) as FindingRow[]).filter((f) => {
     const room = getRoom(f.room_id);
@@ -68,11 +71,31 @@ export default async function ResearcherPage({ params }: { params: Promise<{ add
               <Stat label="Review awards" value={stats.reviewAwards} />
               <Stat label="Rejected reports" value={stats.rejectedFindings} />
               <Stat label="Total earned" value={mstc(stats.totalEarned)} />
+              <Stat label="Findings overturned on appeal" value={appeals.findingsOverturnedOnAppeal} />
             </div>
           ) : (
             <p className="p-4 muted">Contract not configured.</p>
           )}
         </section>
+
+        {(mod.isModerator || mod.roomsModerated > 0) && (
+          <section className="card">
+            <div className="card-header">
+              <h2 className="font-semibold">Moderator track record</h2>
+              <span className="text-xs muted">public accountability for security judgments</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 p-4 text-sm sm:grid-cols-4">
+              <Stat label="Rooms moderated" value={mod.roomsModerated} />
+              <Stat label="Rooms settled" value={mod.roomsSettled} />
+              <Stat label="Deadlines missed" value={mod.deadlinesMissed} />
+              <Stat label="Verdicts (valid / dup / invalid)" value={`${mod.verdicts.valid ?? 0} / ${mod.verdicts.duplicate ?? 0} / ${mod.verdicts.invalid ?? 0}`} />
+              <Stat label="Their verdicts upheld on appeal" value={mod.appealsAgainstTheirVerdicts.upheld} />
+              <Stat label="Their verdicts overturned" value={mod.appealsAgainstTheirVerdicts.overturned} />
+              <Stat label="Appeals decided" value={mod.appealsDecided.upheld + mod.appealsDecided.overturned} />
+              <Stat label="Panel approvals given" value={mod.panelApprovalsGiven} />
+            </div>
+          </section>
+        )}
 
         {dev.releasesFunded > 0 && (
           <section className="card">

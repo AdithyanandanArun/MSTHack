@@ -5,6 +5,8 @@ import { mstc, timeAgo } from "@/lib/format";
 import { chainNow } from "@/lib/server/config";
 import { db } from "@/lib/server/db";
 import { pendingWithdrawal } from "@/lib/server/onchain";
+import { moderatorQueue } from "@/lib/server/moderation";
+import { formatDuration } from "@/lib/phase";
 import { currentViewer, roomPhase, type FindingRow, type RoomRow } from "@/lib/server/queries";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +24,8 @@ export default async function Dashboard() {
   const funded = d.prepare("SELECT * FROM rooms WHERE developer = ? ORDER BY id DESC").all(viewer.address) as RoomRow[];
   const moderating = d.prepare("SELECT * FROM rooms WHERE moderator = ? ORDER BY id DESC").all(viewer.address) as RoomRow[];
   const pending = await pendingWithdrawal(viewer.address);
+  const queue = viewer.isModerator ? moderatorQueue(viewer.address, now) : null;
+  const queueItems = queue ? queue.rooms.filter((r) => r.phase === "review" || r.phase === "expired").length + queue.appeals.length + queue.panelApprovals.length : 0;
 
   return (
     <div className="space-y-6">
@@ -33,6 +37,44 @@ export default async function Dashboard() {
       </div>
 
       <WithdrawBox pendingWei={pending.toString()} />
+
+      {queue && (
+        <section className="card">
+          <div className="card-header">
+            <h2 className="font-semibold">Moderation queue</h2>
+            <span className="text-xs muted">{queueItems} item{queueItems === 1 ? "" : "s"} need you</span>
+          </div>
+          <div className="space-y-3 p-4 text-sm">
+            {queue.rooms.length === 0 && queue.appeals.length === 0 && queue.panelApprovals.length === 0 && <p className="muted">Nothing waiting on you.</p>}
+            {queue.rooms.map((r) => (
+              <div key={r.roomId} className="flex flex-wrap items-center gap-2">
+                <Link href={`/rooms/${r.roomId}?tab=settlement`} className="font-semibold">{r.packageName}@{r.version}</Link>
+                <PhaseBadge phase={r.phase} />
+                <span>{r.nextAction}</span>
+                {r.pendingVerdicts.length > 0 && <Label tone="attention">{r.pendingVerdicts.length} pending verdict{r.pendingVerdicts.length === 1 ? "" : "s"}</Label>}
+                {r.openAppeals > 0 && <Label tone="attention">{r.openAppeals} open appeal{r.openAppeals === 1 ? "" : "s"}</Label>}
+                <span className="text-xs muted">
+                  {r.secondsToDeadline > 0 ? `adjudication deadline in ${formatDuration(r.secondsToDeadline)}` : "deadline passed"}
+                </span>
+              </div>
+            ))}
+            {queue.appeals.map((a) => (
+              <div key={a.appealId} className="flex flex-wrap items-center gap-2">
+                <Label tone="done">appeal to decide</Label>
+                <Link href={`/rooms/${a.roomId}/findings/${a.findingId}`}>#{a.findingId} {a.title}</Link>
+                <span className="text-xs muted">contested verdict: {a.contestedVerdict}</span>
+              </div>
+            ))}
+            {queue.panelApprovals.map((p) => (
+              <div key={p.roomId} className="flex flex-wrap items-center gap-2">
+                <Label tone="done">panel</Label>
+                <Link href={`/rooms/${p.roomId}?tab=settlement`}>{p.packageName}@{p.version}</Link>
+                <span>{p.state}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <div className="card-header"><h2 className="font-semibold">Your findings</h2></div>
