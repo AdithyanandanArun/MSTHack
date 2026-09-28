@@ -286,3 +286,11 @@ export function getArtifactRow(sha256: string) {
     scan: row.scan_json ? (JSON.parse(row.scan_json) as Fact[]) : [],
   };
 }
+
+/** Moderator panel of a room (null when the room has none). */
+export function roomPanel(roomId: number): { panel: string[]; quorum: number } | null {
+  const row = db().prepare("SELECT panel_json, quorum FROM room_panels WHERE room_id = ?").get(roomId) as
+    | { panel_json: string; quorum: number }
+    | undefined;
+  return row ? { panel: JSON.parse(row.panel_json), quorum: row.quorum } : null;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalJson, computeCommitment, findingHash, type FindingContent } from "@/lib/canonical";
+import { canonicalJson, computeCommitment, findingHash, hashAwards, type FindingContent } from "@/lib/canonical";
 
 describe("commitment hashing", () => {
   it("matches ReleaseBond.computeCommitment (vector produced by the Solidity contract)", () => {
@@ -64,5 +64,21 @@ describe("finding hash", () => {
 
   it("canonical JSON sorts keys recursively", () => {
     expect(canonicalJson({ b: 1, a: { d: [2, { z: 1, y: 2 }], c: 3 } })).toBe('{"a":{"c":3,"d":[2,{"y":2,"z":1}]},"b":1}');
+  });
+});
+
+describe("settlement awards hash", () => {
+  it("matches ReleaseBond.hashAwards (vector produced by the Solidity contract)", () => {
+    const E = 10n ** 18n;
+    expect(
+      hashAwards({
+        discoveries: [
+          { commitmentIndex: 0, severity: 3, duplicate: false, amount: 250n * E },
+          { commitmentIndex: 1, severity: 3, duplicate: true, amount: 125n * E },
+        ],
+        reviews: [{ reviewer: "0x1111111111111111111111111111111111111111", amount: 5n * E }],
+        rejected: [2],
+      }),
+    ).toBe("0x61afb9708a7d6ae87903d9a387673dd809d708b6cac5f39757ecf97fcb6d918f");
   });
 });

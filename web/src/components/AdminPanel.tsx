@@ -41,7 +41,7 @@ export function DeployContract({ hasContract, isOwner }: { hasContract: boolean;
     <div className="space-y-2">
       <p className="text-sm">
         Deploys the tested <span className="mono">ReleaseBond</span> contract to <b>{config.chainName}</b> from your connected wallet (you
-        become its owner and first moderator). Cost is about 3.3M gas (~0.0033 MSTC at 1 gwei).
+        become its owner and first moderator). Cost is about 4.3M gas (~0.0043 MSTC at 1 gwei).
       </p>
       {hasContract && <p className="text-sm" style={{ color: "var(--attention)" }}>A contract is already configured; deploying again replaces it for this server.</p>}
       <button className="btn btn-primary" disabled={!signedIn || !account} onClick={deploy}>Deploy ReleaseBond from my wallet</button>

@@ -204,6 +204,25 @@ CREATE TABLE IF NOT EXISTS appeals (
   decided_at INTEGER
 );
 
+-- Moderator panels (from PanelConfigured events; emitted before RoomCreated,
+-- so they live in their own table rather than on the room row).
+CREATE TABLE IF NOT EXISTS room_panels (
+  room_id INTEGER PRIMARY KEY,
+  panel_json TEXT NOT NULL,
+  quorum INTEGER NOT NULL
+);
+
+-- EIP-712 approvals of a frozen settlement by panel members.
+CREATE TABLE IF NOT EXISTS panel_approvals (
+  room_id INTEGER NOT NULL,
+  adjudication_hash TEXT NOT NULL,
+  awards_hash TEXT NOT NULL,
+  signer TEXT NOT NULL,
+  signature TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (room_id, adjudication_hash, signer)
+);
+
 CREATE TABLE IF NOT EXISTS withdrawals (
   account TEXT NOT NULL,
   amount_wei TEXT NOT NULL,

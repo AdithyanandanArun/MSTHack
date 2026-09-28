@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getAddress } from "viem";
-import { releaseBondAbi, releaseBondDeployedBytecode } from "@/lib/chain/releaseBondArtifact";
+import { releaseBondAbi } from "@/lib/chain/releaseBondArtifact";
+import { isReleaseBondRuntime } from "@/lib/chain/runtimeCode";
 import { json, route } from "@/lib/server/api";
 import { requireSession } from "@/lib/server/auth";
 import { appConfig, contractInfo, publicClient } from "@/lib/server/config";
@@ -28,7 +29,7 @@ export const POST = route(async (req) => {
   if (receipt.status !== "success" || !receipt.contractAddress) throw new HttpError(400, "transaction did not deploy a contract");
   if (receipt.from.toLowerCase() !== caller) throw new HttpError(403, "deployment was sent by a different wallet");
   const code = await client.getCode({ address: receipt.contractAddress });
-  if (!code || code.toLowerCase() !== releaseBondDeployedBytecode.toLowerCase()) {
+  if (!isReleaseBondRuntime(code)) {
     throw new HttpError(400, "deployed bytecode does not match this ReleaseBond build");
   }
   const address = getAddress(receipt.contractAddress);

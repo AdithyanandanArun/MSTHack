@@ -2,6 +2,7 @@
 // server with the built-in dev wallets (no Bridgekey or faucet needed).
 //   node scripts/dev-local.mjs            (web on :3000, chain on :8545)
 import { spawn, spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,13 +31,19 @@ if (!(await up())) {
   kids.push(spawn("npx", ["hardhat", "node", "--hostname", "127.0.0.1"], { cwd: contracts, stdio: "ignore", detached: true }));
   for (let i = 0; i < 60 && !(await up()); i++) await new Promise((r) => setTimeout(r, 500));
 }
-// A fresh Hardhat node always deploys ReleaseBond at the same address; redeploy if it is missing.
+// Redeploy when there is no deployment, or when the deployed code is not the
+// current build (e.g. after a contract change), so the demo never runs an old ABI.
+spawnSync("npx", ["hardhat", "compile", "--quiet"], { cwd: contracts, stdio: "inherit" });
+const { immutableRanges, sameRuntimeCode, ARTIFACT } = createRequire(import.meta.url)(path.join(contracts, "scripts", "immutables.js"));
+const compiled = JSON.parse(fs.readFileSync(ARTIFACT, "utf8")).deployedBytecode;
 const dep = path.join(contracts, "deployments", "localhost.json");
 let needDeploy = true;
 if (fs.existsSync(dep)) {
   const { address } = JSON.parse(fs.readFileSync(dep, "utf8"));
   const r = await fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getCode", params: [address, "latest"] }) });
-  needDeploy = (await r.json()).result === "0x";
+  const code = String((await r.json()).result).toLowerCase();
+  needDeploy = !sameRuntimeCode(code, compiled, immutableRanges());
+  if (needDeploy && code !== "0x") console.log("deployed ReleaseBond differs from the current build; redeploying");
 }
 if (needDeploy) {
   const d = spawnSync("npx", ["hardhat", "run", "scripts/deploy.js", "--network", "localhost"], {

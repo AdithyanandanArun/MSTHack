@@ -140,6 +140,15 @@ async function applyEvent(ev: Decoded, log: Log): Promise<void> {
       );
       break;
     }
+    case "PanelConfigured": {
+      const a = ev.args;
+      d.prepare("INSERT INTO room_panels(room_id, panel_json, quorum) VALUES(?, ?, ?) ON CONFLICT(room_id) DO NOTHING").run(
+        Number(a.roomId),
+        JSON.stringify(a.panel.map(lower)),
+        Number(a.quorum),
+      );
+      break;
+    }
     case "BountyIncreased": {
       d.prepare("UPDATE rooms SET bounty_wei = ? WHERE id = ?").run(ev.args.newBounty.toString(), Number(ev.args.roomId));
       break;

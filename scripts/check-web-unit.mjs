@@ -32,6 +32,7 @@ const required = [
   "lets the author or developer appeal a verdict once during review",
   "refuses appeals from others, before a verdict, or outside review",
   "only a different registered moderator may decide an open appeal",
+  "matches ReleaseBond.hashAwards (vector produced by the Solidity contract)",
 ];
 for (const n of required) if (!names.includes(n)) fail(`required test did not pass: ${n}`);
 if (r.numPassedTests < 25) fail(`only ${r.numPassedTests} passing`);

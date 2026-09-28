@@ -60,6 +60,8 @@ interface WalletState {
   sendTx: (label: string, send: (wallet: WalletClient, account: Address) => Promise<Hash>) => Promise<Hash>;
   publicClient: PublicClient;
   refreshSession: () => Promise<void>;
+  /** EIP-712 signature from the connected wallet (no transaction, no gas). */
+  signTyped: (args: Omit<Parameters<WalletClient["signTypedData"]>[0], "account">) => Promise<`0x${string}`>;
 }
 
 const Ctx = createContext<WalletState | null>(null);
@@ -273,7 +275,22 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
     [account, ensureChain, walletClient, publicClient],
   );
 
+  const signTyped = useCallback<WalletState["signTyped"]>(
+    async (args) => {
+      if (!account) throw new Error("connect a wallet first");
+      setBusy("Approve in your wallet…");
+      try {
+        await ensureChain();
+        return await walletClient().signTypedData({ ...args, account } as Parameters<WalletClient["signTypedData"]>[0]);
+      } finally {
+        setBusy(null);
+      }
+    },
+    [account, ensureChain, walletClient],
+  );
+
   const value: WalletState = {
+    signTyped,
     config,
     options,
     account,

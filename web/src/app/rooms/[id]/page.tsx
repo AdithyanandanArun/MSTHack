@@ -20,6 +20,7 @@ import {
   getArtifactRow,
   getRoom,
   roomCommitments,
+  roomPanel,
   roomFindings,
   roomPhase,
   usersByAddress,
@@ -70,6 +71,13 @@ export default async function RoomPage({ params, searchParams }: { params: Promi
             <span className="muted">@{room.version}</span>
           </h1>
           {room.title && <p className="mt-1">{room.title}</p>}
+          {roomPanel(room.id) ? (
+            <div className="mt-1">
+              <Label tone="done" title="Settlement needs EIP-712 approvals from this many panel moderators">
+                moderator panel: {roomPanel(room.id)!.quorum} of {roomPanel(room.id)!.panel.length} approvals
+              </Label>
+            </div>
+          ) : null}
           {room.require_verified ? (
             <div className="mt-1">
               <Label tone="success" title="Only moderator-verified researchers may submit reports">verified researchers only</Label>
@@ -324,6 +332,7 @@ async function SettlementTab({ roomId, viewerAddress, explorer }: { roomId: numb
         onchainHash={p.room.adjudication_hash}
         record={p.room.adjudication_json}
         pendingVerdicts={p.pendingVerdicts}
+        hasPanel={!!roomPanel(roomId)}
       />
     </div>
   );

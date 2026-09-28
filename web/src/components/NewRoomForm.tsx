@@ -52,6 +52,8 @@ export function NewRoomForm() {
   const moderators = config.moderators.filter((m) => m !== account?.toLowerCase());
   const [moderator, setModerator] = useState("");
   const [requireVerified, setRequireVerified] = useState(false);
+  const [panel, setPanel] = useState<string[]>([]);
+  const [panelQuorum, setPanelQuorum] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -85,9 +87,17 @@ export function NewRoomForm() {
       if (!mod) throw new Error("no registered moderator other than you is available");
       const value = parseEther(bounty);
       if (value <= 0n) throw new Error("bounty must be positive");
-      const draft = await api<{ contract: Address; params: { ecosystem: string; packageName: string; version: string; artifactHash: Hex; previousArtifactHash: Hex; moderator: Address } }>(
+      const draft = await api<{ contract: Address; params: { ecosystem: string; packageName: string; version: string; artifactHash: Hex; previousArtifactHash: Hex; moderator: Address; panel: Address[]; panelQuorum: number } }>(
         "/api/rooms/draft",
-        { method: "POST", json: { artifactSha256: artifact.sha256, title, description, moderator: mod, requireVerified } },
+        { method: "POST", json: {
+          artifactSha256: artifact.sha256,
+          title,
+          description,
+          moderator: mod,
+          requireVerified,
+          panel,
+          panelQuorum: panel.length ? Math.min(panelQuorum, panel.length) : 0,
+        } },
       );
       const hash = await sendTx("Lock bounty", (wallet, acct) =>
         wallet.writeContract({
@@ -220,6 +230,37 @@ export function NewRoomForm() {
                 {ADJ.map((h) => <option key={h.s} value={h.s}>{h.label}</option>)}
               </select>
             </label>
+            {moderators.filter((m) => m !== (moderator || moderators[0])).length > 0 && (
+              <fieldset className="text-sm sm:col-span-2">
+                <legend className="field-label">Moderator panel (optional, for high-value rooms)</legend>
+                <p className="mb-1 text-xs muted">
+                  Panel members must approve the exact settlement with a wallet signature before the contract pays anything.
+                </p>
+                {moderators
+                  .filter((m) => m !== (moderator || moderators[0]))
+                  .map((m) => (
+                    <label key={m} className="mr-4 inline-flex items-center gap-1">
+                      <input
+                        type="checkbox"
+                        checked={panel.includes(m)}
+                        onChange={() => setPanel((p) => (p.includes(m) ? p.filter((x) => x !== m) : [...p, m].slice(0, 5)))}
+                      />
+                      <span className="mono">{short(m, 8)}</span>
+                    </label>
+                  ))}
+                {panel.length > 0 && (
+                  <label className="mt-1 flex items-center gap-2">
+                    Approvals required
+                    <select className="input w-20" value={Math.min(panelQuorum, panel.length)} onChange={(e) => setPanelQuorum(Number(e.target.value))}>
+                      {panel.map((_, i) => (
+                        <option key={i + 1} value={i + 1}>{i + 1}</option>
+                      ))}
+                    </select>
+                    of {panel.length}
+                  </label>
+                )}
+              </fieldset>
+            )}
             <label className="flex items-start gap-2 text-sm sm:col-span-2">
               <input type="checkbox" className="mt-1" checked={requireVerified} onChange={(e) => setRequireVerified(e.target.checked)} />
               <span>

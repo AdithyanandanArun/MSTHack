@@ -108,6 +108,47 @@ export function randomNonce(): Hex {
 /** sha256 hex (no prefix) -> bytes32 used on-chain for artifact hashes. */
 export const sha256ToBytes32 = (hex: string): Hex => `0x${hex.replace(/^0x/, "").toLowerCase()}` as Hex;
 
+export interface AwardArgs {
+  discoveries: { commitmentIndex: number; severity: number; duplicate: boolean; amount: bigint }[];
+  reviews: { reviewer: Address; amount: bigint }[];
+  rejected: number[];
+}
+
+/** Mirrors ReleaseBond.hashAwards: keccak256(abi.encode(discoveries, reviews, rejected)). */
+export function hashAwards(a: AwardArgs): Hex {
+  return keccak256(
+    encodeAbiParameters(
+      [
+        {
+          type: "tuple[]",
+          components: [
+            { name: "commitmentIndex", type: "uint32" },
+            { name: "severity", type: "uint8" },
+            { name: "duplicate", type: "bool" },
+            { name: "amount", type: "uint256" },
+          ],
+        },
+        { type: "tuple[]", components: [{ name: "reviewer", type: "address" }, { name: "amount", type: "uint256" }] },
+        { type: "uint32[]" },
+      ],
+      [a.discoveries, a.reviews, a.rejected],
+    ),
+  );
+}
+
+/** EIP-712 typed data a panelist signs to approve a settlement (see ReleaseBond.settlementDigest). */
+export const SETTLEMENT_TYPES = {
+  Settlement: [
+    { name: "roomId", type: "uint256" },
+    { name: "adjudicationHash", type: "bytes32" },
+    { name: "awardsHash", type: "bytes32" },
+  ],
+} as const;
+
+export function settlementDomain(chainId: number, contract: Address) {
+  return { name: "ReleaseBond", version: "1", chainId, verifyingContract: contract } as const;
+}
+
 export function adjudicationHash(record: unknown): Hex {
   return keccak256(toBytes(canonicalJson(record)));
 }
