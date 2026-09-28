@@ -1,103 +1,80 @@
-import Image from "next/image";
+import Link from "next/link";
+import { PhaseBadge } from "@/components/Labels";
+import { mstc, short, timeAgo } from "@/lib/format";
+import { appConfig, chainNow } from "@/lib/server/config";
+import { listRooms, roomCommitments, roomPhase } from "@/lib/server/queries";
+import { formatDuration } from "@/lib/phase";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const cfg = appConfig();
+  const now = await chainNow();
+  const rooms = listRooms();
+  const pooled = rooms.filter((r) => r.status === "active").reduce((a, r) => a + BigInt(r.bounty_wei), 0n);
+  const hunting = rooms.filter((r) => roomPhase(r, now) === "hunting").length;
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="space-y-6">
+      <section className="card p-6">
+        <h1 className="text-2xl font-semibold">Put a bounty on your release. Let verified researchers try to break it.</h1>
+        <p className="mt-2 max-w-3xl muted">
+          ReleaseBond turns an exact software artifact into a funded, time-boxed security competition on MST. Researchers commit
+          private findings on-chain, peers reproduce and refute them with a hybrid agent + rule evidence engine, a moderator
+          adjudicates, and the contract pays.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href="/rooms/new" className="btn btn-primary">Fund a release</Link>
+          <a className="btn" href="https://faucet.masterstroke.academy" target="_blank" rel="noreferrer">Get test MSTC</a>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        <div className="mt-5 flex flex-wrap gap-6 text-sm">
+          <div><span className="text-lg font-semibold">{rooms.length}</span> <span className="muted">security rooms</span></div>
+          <div><span className="text-lg font-semibold">{hunting}</span> <span className="muted">hunting now</span></div>
+          <div><span className="text-lg font-semibold">{mstc(pooled, 2)}</span> <span className="muted">locked in active pools</span></div>
+        </div>
+      </section>
+
+      {!cfg.contractAddress && (
+        <div className="flash flash-warn">
+          No ReleaseBond contract is configured for {cfg.chainName} yet. The owner can deploy it from a Bridgekey wallet on the{" "}
+          <Link href="/admin">admin page</Link>.
+        </div>
+      )}
+
+      <section className="card">
+        <div className="card-header">
+          <h2 className="font-semibold">Security rooms</h2>
+          <span className="text-xs muted">{cfg.chainName}</span>
+        </div>
+        {rooms.length === 0 ? (
+          <div className="px-4 py-10 text-center muted">No funded releases yet. Be the first to put a bounty on a release.</div>
+        ) : (
+          <ul>
+            {rooms.map((r) => {
+              const phase = roomPhase(r, now);
+              const commits = roomCommitments(r.id).length;
+              return (
+                <li key={r.id} className="flex flex-wrap items-center gap-3 border-t px-4 py-3 first:border-t-0" style={{ borderColor: "var(--border-muted)" }}>
+                  <span className="label mono" style={{ borderColor: "var(--border)" }}>{r.ecosystem}</span>
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/rooms/${r.id}`} className="text-base font-semibold">
+                      {r.package_name}@{r.version}
+                    </Link>
+                    {r.title ? <span className="ml-2 muted">{r.title}</span> : null}
+                    <div className="text-xs muted">
+                      Room #{r.id} · artifact <span className="mono">{short(r.artifact_hash, 8)}</span> · opened {timeAgo(r.created_at, now)} ·{" "}
+                      {commits} commitment{commits === 1 ? "" : "s"}
+                      {phase === "hunting" ? ` · hunt closes in ${formatDuration(r.hunt_ends_at - now)}` : ""}
+                    </div>
+                  </div>
+                  <span className="font-semibold">{mstc(r.bounty_wei, 2)}</span>
+                  <PhaseBadge phase={phase} />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
