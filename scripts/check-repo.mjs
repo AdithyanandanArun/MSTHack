@@ -30,7 +30,11 @@ for (const [file, needles] of [
   for (const n of needles) if (!text.includes(n)) fail(`${file} lacks "${n}"`);
 }
 
-const dirty = git("status", "--porcelain");
+// GATES.md is rewritten by the gate checker itself while it records evidence.
+const dirty = git("status", "--porcelain")
+  .split("\n")
+  .filter((l) => l && !/^ M GATES\.md$/.test(l))
+  .join("\n");
 if (dirty) fail(`working tree not clean:\n${dirty}`);
 git("fetch", "--quiet", "origin", "main");
 const local = git("rev-parse", "HEAD");
