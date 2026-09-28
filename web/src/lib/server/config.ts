@@ -93,7 +93,8 @@ export function publicClient(): PublicClient {
   if (!g.__rbPublicClient || g.__rbPublicClient.key !== key) {
     g.__rbPublicClient = {
       key,
-      client: createPublicClient({ chain: chainByKey(chainKey()), transport: http(rpcUrl(), { timeout: 20_000 }) }),
+      // cacheTime 0: the indexer must never act on a stale block number.
+      client: createPublicClient({ chain: chainByKey(chainKey()), transport: http(rpcUrl(), { timeout: 20_000 }), cacheTime: 0 }),
     };
   }
   return g.__rbPublicClient.client;

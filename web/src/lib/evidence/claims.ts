@@ -1,6 +1,9 @@
 import type { Observation } from "@/lib/canonical";
 import type { ClaimCheck, DynamicRun, Fact, Outcome } from "./types";
 
+/** Properties of the code itself that no runtime trace can show. */
+const STATIC_NATURE = new Set<Observation>(["OBFUSCATED_CODE", "DYNAMIC_CODE_EXEC", "SETUID_BINARY"]);
+
 /**
  * Checks each claimed observation against static facts and repeated sandbox
  * runs. Dynamic observation outranks static code evidence; inconsistent runs
@@ -19,6 +22,9 @@ export function checkClaims(claims: Observation[], staticFacts: Fact[], runs: Dy
     } else if (observedIn > 0) {
       result = "inconclusive"; // flaky across fresh environments
       basis = "dynamic";
+    } else if (st.length && STATIC_NATURE.has(observation)) {
+      result = "confirmed";
+      basis = "static";
     } else if (st.length) {
       // Present in code but not observed at runtime (or no sandbox): code-level confirmation only
       // when no sandbox ran; if the sandbox ran and never saw it, that's inconclusive.

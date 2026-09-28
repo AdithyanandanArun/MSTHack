@@ -27,7 +27,7 @@ async function main() {
     console.log(`moderator registered: ${m}`);
   }
 
-  const out = path.join(__dirname, "..", "deployments", `${hre.network.name}.json`);
+  const out = process.env.DEPLOYMENTS_OUT || path.join(__dirname, "..", "deployments", `${hre.network.name}.json`);
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(
     out,

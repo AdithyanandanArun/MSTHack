@@ -26,7 +26,14 @@ export async function syncChain(opts: { force?: boolean; minIntervalMs?: number 
   const { address, deployBlock } = contractInfo();
   if (!address) return null;
   if (!opts.force && Date.now() - lastSyncAt < (opts.minIntervalMs ?? 8_000)) return null;
-  if (syncing) return syncing;
+  if (syncing) {
+    // A pass already in flight may have read the chain head before the block
+    // the caller cares about. Unforced callers can share it; forced callers
+    // wait for it and then run their own pass.
+    if (!opts.force) return syncing;
+    await syncing.catch(() => null);
+    if ((syncing as Promise<SyncResult> | null) !== null) return syncChain(opts);
+  }
   syncing = (async () => {
     try {
       const client = publicClient();
@@ -51,10 +58,16 @@ export async function syncChain(opts: { force?: boolean; minIntervalMs?: number 
   return syncing;
 }
 
+function indexedThrough(): bigint {
+  const { address } = contractInfo();
+  const last = address ? getSetting(`sync:${lower(address)}`) : null;
+  return last ? BigInt(last) : -1n;
+}
+
 /** Wait for a transaction, then index everything up to its block. */
 export async function syncAfterTx(txHash: Hex): Promise<{ status: "success" | "reverted"; blockNumber: number }> {
   const receipt = await publicClient().waitForTransactionReceipt({ hash: txHash, timeout: 120_000 });
-  await syncChain({ force: true });
+  for (let i = 0; i < 5 && indexedThrough() < receipt.blockNumber; i++) await syncChain({ force: true });
   return { status: receipt.status, blockNumber: Number(receipt.blockNumber) };
 }
 

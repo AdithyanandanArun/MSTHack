@@ -126,6 +126,16 @@ export function parseTelemetry(files: Record<string, string>, run: number): Fact
   for (const [name, text] of Object.entries(files)) {
     if (!name.startsWith("strace-")) continue;
     const phase = name.replace(/^strace-|\.log$/g, "");
+    // The runner only traces a lifecycle hook when package.json declares it and it ran.
+    if (phase !== "require" && once(`hook:${phase}`)) {
+      add({
+        rule: "dyn.lifecycle-hook",
+        category: "install-script",
+        severity: "medium",
+        observation: "INSTALL_SCRIPT",
+        detail: `${phase} lifecycle script executed at install time`,
+      });
+    }
     for (const line of text.split("\n")) {
       const open = line.match(/openat\([^,]+,\s*"([^"]+)",\s*([A-Z_|]+)/);
       if (open) {

@@ -29,6 +29,11 @@ describe("sandbox telemetry parser", () => {
     expect(obs("PERSISTENCE")[0].file).toBe("/home/sandbox/.bashrc");
   });
 
+  it("records that an install-time lifecycle hook actually ran", () => {
+    expect(obs("INSTALL_SCRIPT")[0].detail).toContain("postinstall");
+    expect(parseTelemetry({ "strace-require.log": "" }, 1).some((f) => f.observation === "INSTALL_SCRIPT")).toBe(false);
+  });
+
   it("ignores the package's own files and expected interpreters", () => {
     expect(facts.some((f) => f.file === "/home/sandbox/work/pkg/index.js")).toBe(false);
     expect(facts.some((f) => f.detail.includes("/bin/sh"))).toBe(false);
@@ -73,6 +78,11 @@ describe("claim checks", () => {
   it("falls back to static evidence only when no sandbox ran", () => {
     expect(checkClaims(["NETWORK_EGRESS"], [fact("S1", "NETWORK_EGRESS")], [])[0]).toMatchObject({ result: "confirmed", basis: "static" });
     expect(checkClaims(["NETWORK_EGRESS"], [fact("S1", "NETWORK_EGRESS")], [run(1, [])])[0].result).toBe("inconclusive");
+  });
+
+  it("confirms code-level properties from static evidence even after sandbox runs", () => {
+    const f = { ...fact("S3", "OBFUSCATED_CODE"), category: "obfuscation" as const };
+    expect(checkClaims(["OBFUSCATED_CODE"], [f], [run(1, [])])[0]).toMatchObject({ result: "confirmed", basis: "static" });
   });
 
   it("reports partial and failed reproduction", () => {
