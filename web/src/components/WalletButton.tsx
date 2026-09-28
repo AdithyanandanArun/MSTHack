@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { errorMessage } from "@/lib/client/api";
 import { short } from "@/lib/format";
@@ -9,6 +10,7 @@ import { useSignedIn, useWallet } from "./WalletProvider";
 export function WalletButton() {
   const { options, account, connect, disconnect, signIn, session, walletChainId, config, busy } = useWallet();
   const signedIn = useSignedIn();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -27,6 +29,13 @@ export function WalletButton() {
     } catch (e) {
       setError(errorMessage(e));
     }
+  };
+
+  // Leave signed-in pages (dashboard, profile) and re-render server components without the session.
+  const signOut = async () => {
+    await disconnect();
+    router.push("/");
+    router.refresh();
   };
 
   const wrongChain = account && walletChainId !== null && walletChainId !== config.chainId;
@@ -86,7 +95,7 @@ export function WalletButton() {
               <Link href={`/researchers/${account.toLowerCase()}`} className="block rounded px-2 py-1.5 hover:bg-[var(--bg-subtle)]" style={{ color: "var(--fg)" }} onClick={() => setOpen(false)}>
                 Your profile
               </Link>
-              <button className="block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--bg-subtle)]" onClick={() => run(disconnect)}>
+              <button className="block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--bg-subtle)]" onClick={() => run(signOut)}>
                 Sign out
               </button>
             </>
