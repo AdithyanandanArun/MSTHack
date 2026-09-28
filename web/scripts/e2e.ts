@@ -37,6 +37,7 @@ const KEYS: Hex[] = [
   "0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6",
   "0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a",
   "0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba",
+  "0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e",
 ];
 
 const chain = { ...localHardhat, rpcUrls: { default: { http: [RPC] } } };
@@ -164,9 +165,11 @@ async function submitFinding(who: Actor, roomId: number, artifactHash: Hex, c: F
 }
 
 async function main() {
-  const [owner, dev, alice, bob, carol, dave] = KEYS.map((k, i) => new Actor(["owner/moderator", "developer", "alice", "bob", "carol", "dave"][i], privateKeyToAccount(k)));
+  const [owner, dev, alice, bob, carol, dave, erin] = KEYS.map(
+    (k, i) => new Actor(["owner/moderator", "developer", "alice", "bob", "carol", "dave", "erin (appeals moderator)"][i], privateKeyToAccount(k)),
+  );
   console.log("• sign in all wallets with SIWE");
-  for (const a of [owner, dev, alice, bob, carol, dave]) await a.signIn();
+  for (const a of [owner, dev, alice, bob, carol, dave, erin]) await a.signIn();
   const me = await alice.ok<{ address: string }>("GET", "/api/auth/me");
   assert(me.address === alice.address, "session cookie identifies the signed-in wallet");
   const forged = await new Actor("anon", alice.account).req("GET", "/api/auth/me");
@@ -196,7 +199,7 @@ async function main() {
   const draft = await dev.ok<{ params: { ecosystem: string; packageName: string; version: string; artifactHash: Hex; previousArtifactHash: Hex; moderator: Address } }>(
     "POST",
     "/api/rooms/draft",
-    { artifactSha256: art.sha256, title: "E2E demo room", description: "Break the **2.0.0** release.", moderator: owner.address },
+    { artifactSha256: art.sha256, title: "E2E demo room", description: "Break the **2.0.0** release.", moderator: owner.address, requireVerified: true },
   );
   const bounty = parseEther("100");
   const createHash = await dev.tx("createRoom", [{ ...draft.params, huntDuration: 600n, disclosureDuration: 120n, adjudicationWindow: 86400n }], bounty);
@@ -216,13 +219,19 @@ async function main() {
   assert(room.phase === "hunting", "room is hunting");
   assert(room.room.bounty_wei === bounty.toString(), "escrowed bounty mirrored from chain");
   assert(room.room.title === "E2E demo room", "off-chain room description linked by artifact hash");
+  assert((room.room as unknown as { require_verified: number }).require_verified === 1, "verified-only requirement mirrored from the draft");
+  for (const who of [alice, bob, carol]) await owner.ok("POST", "/api/admin/verify-researcher", { address: who.address, verified: true });
+  assert((await alice.req("POST", "/api/admin/verify-researcher", { address: dave.address, verified: true })).status === 403, "only moderators can verify researchers");
   const artifactHash = room.room.artifact_hash;
 
   console.log("• researchers submit private findings with on-chain commitments");
   const upload = new FormData();
   upload.set("file", new Blob(["open('/home/sandbox/.ssh/demo_key')\nconnect(203.0.113.10:443)\n"]), "strace-excerpt.log");
   const att = await alice.ok<{ id: number; sha256: string }>("POST", "/api/uploads", upload);
+  const unverified = await dave.req("POST", `/api/rooms/${roomId}/findings`, { ...content(roomId, {}), nonce: randomNonce(), findingHash: `0x${"2".repeat(64)}`, commitment: `0x${"3".repeat(64)}` });
+  assert(unverified.status === 403, "unverified researcher refused in a verified-only room");
   const aliceF = await submitFinding(alice, roomId, artifactHash, content(roomId, { attachments: [att.sha256] }), [att.id]);
+  assert(aliceF.id > 0, "verified researcher accepted");
   const bobF = await submitFinding(
     bob,
     roomId,
@@ -237,7 +246,7 @@ async function main() {
   );
   const devFinding = await dev.req("POST", `/api/rooms/${roomId}/findings`, { ...content(roomId, {}), nonce: randomNonce(), findingHash: `0x${"0".repeat(64)}`, commitment: `0x${"1".repeat(64)}` });
   assert(devFinding.status === 403, "developer cannot submit findings to their own room");
-  const tampered = await dave.req("POST", `/api/rooms/${roomId}/findings`, { ...content(roomId, {}), nonce: randomNonce(), findingHash: aliceF.fh, commitment: aliceF.commitment });
+  const tampered = await bob.req("POST", `/api/rooms/${roomId}/findings`, { ...content(roomId, {}), nonce: randomNonce(), findingHash: aliceF.fh, commitment: aliceF.commitment });
   assert(tampered.status === 400, "server rejects a report whose hashes it cannot reproduce");
 
   const aliceView = await alice.ok<{ finding: { status: string; commitmentIndex: number; nonce: string } }>("GET", `/api/findings/${aliceF.id}`);
@@ -319,12 +328,30 @@ async function main() {
   await owner.ok("POST", `/api/findings/${bobF.id}/adjudicate`, { verdict: "duplicate", duplicateOf: aliceF.id, reasoning: "Independent discovery of the same install-time exfiltration." });
   await owner.ok("POST", `/api/findings/${carolF.id}/adjudicate`, { verdict: "invalid", reasoning: "No persistence was observed by rules, sandbox or peers.", materialReviewers: [dave.address] });
 
+  console.log("• appeal of a verdict");
+  await owner.tx("setModerator", [erin.account.address, true]);
+  const appeal = await carol.req<{ id: number }>("POST", `/api/findings/${carolF.id}/appeals`, { reason: "The cron write happens only on the second install; please re-run twice." });
+  assert(appeal.status === 201 && appeal.data.id > 0, "appeal filed by the author");
+  assert((await carol.req("POST", `/api/findings/${carolF.id}/appeals`, { reason: "Filing a second appeal for the same finding." })).status >= 400, "only one appeal per finding");
+  assert((await bob.req("POST", `/api/findings/${carolF.id}/appeals`, { reason: "Bystanders should not be able to appeal." })).status === 403, "bystanders cannot appeal");
+  const selfDecide = await owner.req("POST", `/api/appeals/${appeal.data.id}/decide`, { decision: "overturned", newVerdict: "valid", newSeverity: "low", reasoning: "Room moderator trying to decide." });
+  assert(selfDecide.status === 403, "room moderator cannot decide an appeal");
+  assert((await owner.req("POST", `/api/rooms/${roomId}/settlement`)).status === 409, "settlement blocked while an appeal is open");
+  await erin.ok("POST", `/api/appeals/${appeal.data.id}/decide`, { decision: "upheld", reasoning: "Re-ran twice in fresh sandboxes; still no persistence observed." });
+  assert(true, "appeal decided by a second moderator");
+  const readj = await owner.req("POST", `/api/findings/${carolF.id}/adjudicate`, { verdict: "valid", finalSeverity: "low", reasoning: "Changing my mind after the appeal." });
+  assert(readj.status === 409, "the room moderator cannot change a verdict after an appeal");
+  const carolView = await carol.ok<{ appeal: { status: string } | null }>("GET", `/api/findings/${carolF.id}`);
+  assert(carolView.appeal?.status === "upheld", "appeal outcome visible on the finding");
+
   const prepared = await owner.ok<{
     adjudicationHash: Hex;
     record: unknown;
     args: { discoveries: { commitmentIndex: number; severity: number; duplicate: boolean; amount: string }[]; reviews: { reviewer: Address; amount: string }[]; rejected: number[] };
   }>("POST", `/api/rooms/${roomId}/settlement`);
   assert(adjudicationHash(prepared.record) === prepared.adjudicationHash, "adjudication hash recomputes from the public record");
+  const recCarol = (prepared.record as { findings: { findingId: number; appeal: { status: string; reviewer: string } | null }[] }).findings.find((f) => f.findingId === carolF.id);
+  assert(recCarol?.appeal?.status === "upheld" && recCarol.appeal.reviewer === erin.address, "appeal recorded in the adjudication record");
   assert(prepared.args.rejected.length === 1 && prepared.args.rejected[0] === 2, "carol's commitment rejected");
   const a0 = BigInt(prepared.args.discoveries.find((d) => d.commitmentIndex === 0)!.amount);
   const a1 = BigInt(prepared.args.discoveries.find((d) => d.commitmentIndex === 1)!.amount);

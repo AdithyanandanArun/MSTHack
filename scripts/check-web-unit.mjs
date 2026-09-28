@@ -29,6 +29,9 @@ const required = [
   "allows the budget within a window then blocks with a retry-after",
   "isolates keys so one wallet cannot spend another's budget",
   "resets after the window elapses",
+  "lets the author or developer appeal a verdict once during review",
+  "refuses appeals from others, before a verdict, or outside review",
+  "only a different registered moderator may decide an open appeal",
 ];
 for (const n of required) if (!names.includes(n)) fail(`required test did not pass: ${n}`);
 if (r.numPassedTests < 25) fail(`only ${r.numPassedTests} passing`);
