@@ -10,7 +10,11 @@ export interface LimitRule {
 
 /** Budgets per action. Tunable with RELEASEBOND_RATE_LIMIT_SCALE (e.g. 0.1 for tests, 10 for demos). */
 export const RULES = {
-  auth: { limit: 30, windowMs: 60_000 },
+  // Nonces are cheap and expire after 10 minutes; a high global cap only bounds table growth.
+  // (A low shared bucket would let one client lock everyone out of signing in.)
+  authNonce: { limit: 600, windowMs: 60_000 },
+  // Signature checks are limited per claimed wallet.
+  authVerify: { limit: 10, windowMs: 60_000 },
   artifact: { limit: 10, windowMs: 10 * 60_000 },
   roomDraft: { limit: 20, windowMs: 10 * 60_000 },
   finding: { limit: 10, windowMs: 10 * 60_000 },
