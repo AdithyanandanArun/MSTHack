@@ -320,6 +320,17 @@ async function main() {
   assert(thread.comments.find((c) => c.id === repro.id)?.evidenceRunId === run.id, "evidence run attached to the reproduction");
 
   console.log("• moderator adjudicates and settles on-chain");
+  type Queue = {
+    rooms: { roomId: number; pendingVerdicts: { findingId: number }[]; nextAction: string }[];
+    appeals: { appealId: number; findingId: number }[];
+    panelApprovals: { roomId: number; state: string }[];
+  };
+  const q0 = await owner.ok<Queue>("GET", "/api/moderation/queue");
+  const qRoom = q0.rooms.find((r) => r.roomId === roomId);
+  assert(qRoom?.pendingVerdicts.length === 3 && qRoom.nextAction === "record verdicts", "moderator queue lists pending verdicts");
+  const carolObj = await dave.ok<{ unresolvedObjections: number }>("GET", `/api/findings/${carolF.id}`);
+  const aliceObj = await dave.ok<{ unresolvedObjections: number }>("GET", `/api/findings/${aliceF.id}`);
+  assert(carolObj.unresolvedObjections === 1 && aliceObj.unresolvedObjections === 0, "unresolved objections counted on the finding");
   const notMod = await bob.req("POST", `/api/findings/${aliceF.id}/adjudicate`, { verdict: "valid", finalSeverity: "high", reasoning: "looks right to me" });
   assert(notMod.status === 403, "only the room moderator adjudicates");
   const badReviewer = await owner.req("POST", `/api/findings/${aliceF.id}/adjudicate`, { verdict: "valid", finalSeverity: "high", reasoning: "Reproduced by rules and peers.", materialReviewers: [alice.address] });
@@ -342,12 +353,22 @@ async function main() {
   const selfDecide = await owner.req("POST", `/api/appeals/${appeal.data.id}/decide`, { decision: "overturned", newVerdict: "valid", newSeverity: "low", reasoning: "Room moderator trying to decide." });
   assert(selfDecide.status === 403, "room moderator cannot decide an appeal");
   assert((await owner.req("POST", `/api/rooms/${roomId}/settlement`)).status === 409, "settlement blocked while an appeal is open");
-  await erin.ok("POST", `/api/appeals/${appeal.data.id}/decide`, { decision: "upheld", reasoning: "Re-ran twice in fresh sandboxes; still no persistence observed." });
+  const erinQueue = await erin.ok<Queue>("GET", "/api/moderation/queue");
+  const ownerQueue = await owner.ok<Queue>("GET", "/api/moderation/queue");
+  assert(
+    erinQueue.appeals.some((a) => a.appealId === appeal.data.id) && !ownerQueue.appeals.some((a) => a.appealId === appeal.data.id),
+    "appeals moderator sees the open appeal in their queue",
+  );
+  await erin.ok("POST", `/api/appeals/${appeal.data.id}/decide`, {
+    decision: "overturned",
+    newVerdict: "inconclusive",
+    reasoning: "The claim was not reproduced, but the evidence is not strong enough to call it invalid either.",
+  });
   assert(true, "appeal decided by a second moderator");
   const readj = await owner.req("POST", `/api/findings/${carolF.id}/adjudicate`, { verdict: "valid", finalSeverity: "low", reasoning: "Changing my mind after the appeal." });
   assert(readj.status === 409, "the room moderator cannot change a verdict after an appeal");
   const carolView = await carol.ok<{ appeal: { status: string } | null }>("GET", `/api/findings/${carolF.id}`);
-  assert(carolView.appeal?.status === "upheld", "appeal outcome visible on the finding");
+  assert(carolView.appeal?.status === "overturned", "appeal outcome visible on the finding");
 
   const prepared = await owner.ok<{
     adjudicationHash: Hex;
@@ -356,8 +377,8 @@ async function main() {
   }>("POST", `/api/rooms/${roomId}/settlement`);
   assert(adjudicationHash(prepared.record) === prepared.adjudicationHash, "adjudication hash recomputes from the public record");
   const recCarol = (prepared.record as { findings: { findingId: number; appeal: { status: string; reviewer: string } | null }[] }).findings.find((f) => f.findingId === carolF.id);
-  assert(recCarol?.appeal?.status === "upheld" && recCarol.appeal.reviewer === erin.address, "appeal recorded in the adjudication record");
-  assert(prepared.args.rejected.length === 1 && prepared.args.rejected[0] === 2, "carol's commitment rejected");
+  assert(recCarol?.appeal?.status === "overturned" && recCarol.appeal.reviewer === erin.address, "appeal recorded in the adjudication record");
+  assert(prepared.args.rejected.length === 0, "carol's overturned (inconclusive) finding is neither paid nor rejected");
   const a0 = BigInt(prepared.args.discoveries.find((d) => d.commitmentIndex === 0)!.amount);
   const a1 = BigInt(prepared.args.discoveries.find((d) => d.commitmentIndex === 1)!.amount);
   assert(a1 * 2n === a0, "duplicate earns half of the original");
@@ -394,6 +415,8 @@ async function main() {
   assert((await erin.req("POST", `/api/rooms/${roomId}/settlement/approve`, { signature: erinSig })).status === 403, "non-panelists cannot approve");
   const wrongSig = await frank.account.signTypedData({ ...typed, message: { ...typed.message, awardsHash: `0x${"9".repeat(64)}` } });
   assert((await frank.req("POST", `/api/rooms/${roomId}/settlement/approve`, { signature: wrongSig })).status === 400, "approvals of different awards are rejected");
+  const frankQueue = await frank.ok<Queue>("GET", "/api/moderation/queue");
+  assert(frankQueue.panelApprovals.some((p) => p.roomId === roomId && p.state === "awaiting your signature"), "panelist sees the settlement awaiting their signature");
   const frankSig = await frank.account.signTypedData(typed);
   const approved = await frank.ok<{ approvals: number; quorum: number }>("POST", `/api/rooms/${roomId}/settlement/approve`, { signature: frankSig });
   assert(approved.approvals === 1 && approved.quorum === 1, "panelist approval collected");
@@ -408,7 +431,7 @@ async function main() {
   const total = prepared.args.discoveries.reduce((s, d) => s + BigInt(d.amount), 0n) + prepared.args.reviews.reduce((s, r) => s + BigInt(r.amount), 0n);
   assert(BigInt(settledRoom.room.refunded_wei) === bounty - total, "remainder refunded to the developer");
   const stats = (await pub.readContract({ address: CONTRACT, abi: releaseBondAbi, functionName: "statsOf", args: [carol.account.address] })) as { rejectedFindings: number };
-  assert(stats.rejectedFindings === 1, "carol's rejected report recorded in on-chain reputation");
+  assert(stats.rejectedFindings === 0, "an overturned verdict is not recorded as a rejected report on-chain");
 
   console.log("• withdrawal pays the wallet");
   const before = await pub.getBalance({ address: alice.account.address });
@@ -493,6 +516,36 @@ async function main() {
   const overQuota = await carol.req("POST", "/api/uploads", blob());
   const otherWallet = await dave.req("POST", "/api/uploads", blob());
   assert(overQuota.status === 413 && otherWallet.status === 201, "upload quota enforced per wallet");
+
+  console.log("• moderator and researcher accountability, health");
+  const ownerTrack = await dave.ok<{
+    roomsModerated: number;
+    roomsSettled: number;
+    verdicts: Record<string, number>;
+    appealsAgainstTheirVerdicts: { overturned: number };
+  }>("GET", `/api/moderators/${owner.address}`);
+  const erinTrack = await dave.ok<{ appealsDecided: { overturned: number } }>("GET", `/api/moderators/${erin.address}`);
+  assert(
+    ownerTrack.roomsModerated === 1 &&
+      ownerTrack.roomsSettled === 1 &&
+      ownerTrack.verdicts.valid === 1 &&
+      ownerTrack.verdicts.duplicate === 1 &&
+      ownerTrack.verdicts.invalid === 1 &&
+      ownerTrack.appealsAgainstTheirVerdicts.overturned === 1 &&
+      erinTrack.appealsDecided.overturned === 1,
+    "moderator track record counts rooms, verdicts and appeal outcomes",
+  );
+  const carolRep = await dave.ok<{ appeals: { findingsOverturnedOnAppeal: number; overturned: { from: string; to: string }[] } }>(
+    "GET",
+    `/api/researchers/${carol.address}`,
+  );
+  assert(
+    carolRep.appeals.findingsOverturnedOnAppeal === 1 && carolRep.appeals.overturned[0].from === "invalid" && carolRep.appeals.overturned[0].to === "inconclusive",
+    "reputation counts findings overturned on appeal",
+  );
+  const health = await fetch(`${BASE}/api/health`);
+  const hj = (await health.json()) as { status: string; checks: Record<string, string>; chainId: number };
+  assert(health.status === 200 && hj.status === "ready" && hj.checks.rpc === "ok" && hj.chainId === chain.id, "health endpoint reports ready against the local chain");
 
   console.log("• in-app deployment registration (/admin)");
   const deployAndRegister = async (who: Actor, bytecode: Hex, args: unknown[] = []) => {

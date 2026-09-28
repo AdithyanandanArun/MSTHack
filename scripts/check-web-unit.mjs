@@ -33,6 +33,9 @@ const required = [
   "refuses appeals from others, before a verdict, or outside review",
   "only a different registered moderator may decide an open appeal",
   "matches ReleaseBond.hashAwards (vector produced by the Solidity contract)",
+  "reports ready when every dependency is healthy",
+  "is down with 503 on a wrong chain or unreachable RPC or failed database",
+  "is degraded but serving when the contract is missing or the indexer lags or the queue backs up",
 ];
 for (const n of required) if (!names.includes(n)) fail(`required test did not pass: ${n}`);
 if (r.numPassedTests < 25) fail(`only ${r.numPassedTests} passing`);
