@@ -14,6 +14,7 @@ export const RULES = {
   artifact: { limit: 10, windowMs: 10 * 60_000 },
   roomDraft: { limit: 20, windowMs: 10 * 60_000 },
   finding: { limit: 10, windowMs: 10 * 60_000 },
+  appeal: { limit: 10, windowMs: 10 * 60_000 },
   comment: { limit: 30, windowMs: 60_000 },
   vote: { limit: 60, windowMs: 60_000 },
   upload: { limit: 30, windowMs: 10 * 60_000 },

@@ -11,6 +11,7 @@ import {
   type Observation,
   type Severity,
 } from "@/lib/canonical";
+import { canDecideAppeal, canFileAppeal } from "@/lib/appeals";
 import { planSettlement, type AdjudicatedFinding } from "@/lib/payout";
 import { allowedCommentKinds, COMMENT_KINDS, phaseOf, type Viewer } from "@/lib/phase";
 import { appConfig, chainNow } from "./config";
@@ -23,6 +24,7 @@ import {
   evidenceRun,
   findingComments,
   HttpError,
+  isModerator,
   requireFinding,
   requireRoom,
   roomFindings,
@@ -67,6 +69,10 @@ export async function createFinding(roomId: number, author: string, input: z.inf
   const now = await chainNow();
   if (phaseOf(room, now) !== "hunting") throw new HttpError(409, "the hunt is closed for this release");
   if (author === room.developer || author === room.moderator) throw new HttpError(403, "the developer and moderator cannot submit findings");
+  if (room.require_verified) {
+    const verified = (db().prepare("SELECT verified FROM users WHERE address = ?").get(author) as { verified: number } | undefined)?.verified;
+    if (!verified) throw new HttpError(403, "this room only accepts reports from verified researchers; ask a moderator to verify your wallet");
+  }
 
   const attachments = ownUnlinkedAttachments(input.attachmentIds, author);
   const content = {
@@ -147,13 +153,50 @@ function userLabel(users: ReturnType<typeof usersByAddress>, address: string) {
   return { address, researcherNo: u?.researcher_no ?? null, handle: u?.handle ?? null, verified: !!u?.verified };
 }
 
+interface AppealRow {
+  id: number;
+  finding_id: number;
+  appellant: string;
+  reason: string;
+  status: string;
+  reviewer: string | null;
+  decision_reasoning: string | null;
+  new_verdict: string | null;
+  new_severity: Severity | null;
+  new_duplicate_of: number | null;
+  created_at: number;
+  decided_at: number | null;
+}
+
+function appealForFinding(findingId: number): AppealRow | null {
+  return (db().prepare("SELECT * FROM appeals WHERE finding_id = ?").get(findingId) as AppealRow | undefined) ?? null;
+}
+
+function publicAppeal(appeal: AppealRow) {
+  return {
+    id: appeal.id,
+    appellant: appeal.appellant,
+    reason: appeal.reason,
+    status: appeal.status,
+    reviewer: appeal.reviewer,
+    decisionReasoning: appeal.decision_reasoning,
+    newVerdict: appeal.new_verdict,
+    newSeverity: appeal.new_severity,
+    newDuplicateOf: appeal.new_duplicate_of,
+    createdAt: appeal.created_at,
+    decidedAt: appeal.decided_at,
+  };
+}
+
 /** Full finding + thread, or 403 when the viewer may not read it yet. */
 export async function findingDetail(findingId: number, viewer: Viewer) {
   const f = requireFinding(findingId);
   const room = requireRoom(f.room_id);
   const now = await chainNow();
+  const phase = phaseOf(room, now);
   if (!canView(viewer, room, f, now)) throw new HttpError(403, "this finding is private until the room's disclosure rules open it");
 
+  const appeal = appealForFinding(f.id);
   const comments = findingComments(f.id);
   const users = usersByAddress([f.author, room.developer, room.moderator, ...comments.map((c) => c.author)]);
   const cVotes = voteCounts("comment", comments.map((c) => c.id), viewer.address);
@@ -177,7 +220,7 @@ export async function findingDetail(findingId: number, viewer: Viewer) {
       artifactHash: room.artifact_hash,
       developer: room.developer,
       moderator: room.moderator,
-      phase: phaseOf(room, now),
+      phase,
       bountyWei: room.bounty_wei,
       huntEndsAt: room.hunt_ends_at,
       disclosureEndsAt: room.disclosure_ends_at,
@@ -219,6 +262,7 @@ export async function findingDetail(findingId: number, viewer: Viewer) {
       votes: fVotes.votes,
       votedByMe: fVotes.mine,
     },
+    appeal: appeal ? publicAppeal(appeal) : null,
     comments: comments.map((c) => ({
       id: c.id,
       parentId: c.parent_id,
@@ -242,6 +286,15 @@ export async function findingDetail(findingId: number, viewer: Viewer) {
       isAuthor,
       isRoomModerator: viewer.address === room.moderator,
       isDeveloper: viewer.address === room.developer,
+      canAppeal: canFileAppeal({ address: viewer.address, room, finding: f, phase, existingAppeal: appeal }).ok,
+      canDecideAppeal: canDecideAppeal({
+        address: viewer.address,
+        isModerator: viewer.address ? isModerator(viewer.address) : false,
+        room,
+        finding: f,
+        appeal,
+        phase,
+      }).ok,
     },
   };
 }
@@ -327,10 +380,99 @@ export const Adjudication = z
   .refine((a) => a.verdict !== "valid" || !!a.finalSeverity, { message: "valid findings need a final severity", path: ["finalSeverity"] })
   .refine((a) => a.verdict !== "duplicate" || !!a.duplicateOf, { message: "duplicates must reference the original", path: ["duplicateOf"] });
 
+export const CreateAppeal = z.object({
+  reason: z.string().trim().min(20).max(5_000),
+});
+
+export const DecideAppeal = z
+  .object({
+    decision: z.enum(["upheld", "overturned"]),
+    reasoning: z.string().trim().min(10).max(10_000),
+    newVerdict: z.enum(["valid", "duplicate", "invalid", "inconclusive"]).optional(),
+    newSeverity: z.enum(SEVERITIES).optional(),
+    newDuplicateOf: z.number().int().positive().optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (input.decision !== "overturned") return;
+    if (!input.newVerdict) ctx.addIssue({ code: "custom", message: "an overturned appeal needs a new verdict", path: ["newVerdict"] });
+    if (input.newVerdict === "valid" && !input.newSeverity) {
+      ctx.addIssue({ code: "custom", message: "a valid verdict needs a new severity", path: ["newSeverity"] });
+    }
+    if (input.newVerdict === "duplicate" && !input.newDuplicateOf) {
+      ctx.addIssue({ code: "custom", message: "a duplicate verdict needs the original finding", path: ["newDuplicateOf"] });
+    }
+  });
+
+export async function createAppeal(findingId: number, appellant: string, input: z.infer<typeof CreateAppeal>) {
+  const finding = requireFinding(findingId);
+  const room = requireRoom(finding.room_id);
+  const phase = phaseOf(room, await chainNow());
+  const existingAppeal = appealForFinding(finding.id);
+  const eligibility = canFileAppeal({ address: appellant, room, finding, phase, existingAppeal });
+  if (!eligibility.ok) {
+    const address = appellant.toLowerCase();
+    const allowedPerson = [finding.author, room.developer].some((candidate) => candidate.toLowerCase() === address);
+    throw new HttpError(allowedPerson ? 409 : 403, eligibility.reason ?? "appeal not allowed");
+  }
+
+  const result = db()
+    .prepare("INSERT OR IGNORE INTO appeals(finding_id, appellant, reason, created_at) VALUES(?, ?, ?, ?)")
+    .run(finding.id, appellant.toLowerCase(), input.reason, nowSec());
+  if (result.changes !== 1) throw new HttpError(409, "an appeal has already been filed for this finding");
+  return { id: Number(result.lastInsertRowid) };
+}
+
+export async function decideAppeal(appealId: number, reviewer: string, input: z.infer<typeof DecideAppeal>) {
+  const database = db();
+  const appeal = database.prepare("SELECT * FROM appeals WHERE id = ?").get(appealId) as AppealRow | undefined;
+  if (!appeal) throw new HttpError(404, "appeal not found");
+  const finding = requireFinding(appeal.finding_id);
+  const room = requireRoom(finding.room_id);
+  const phase = phaseOf(room, await chainNow());
+  const registeredModerator = isModerator(reviewer);
+  const eligibility = canDecideAppeal({ address: reviewer, isModerator: registeredModerator, room, finding, appeal, phase });
+  if (!eligibility.ok) {
+    const address = reviewer.toLowerCase();
+    const conflicted =
+      !registeredModerator ||
+      [room.moderator, appeal.appellant, finding.author, room.developer].some((candidate) => candidate.toLowerCase() === address);
+    throw new HttpError(conflicted ? 403 : 409, eligibility.reason ?? "appeal decision not allowed");
+  }
+
+  const newVerdict = input.decision === "overturned" ? input.newVerdict! : null;
+  let newSeverity: Severity | null = null;
+  let newDuplicateOf: number | null = null;
+  if (newVerdict === "valid") newSeverity = input.newSeverity!;
+  if (newVerdict === "duplicate") {
+    const original = database.prepare("SELECT * FROM findings WHERE id = ?").get(input.newDuplicateOf!) as FindingRow | undefined;
+    if (!original || original.room_id !== room.id || original.id === finding.id || original.verdict !== "valid" || !original.final_severity) {
+      throw new HttpError(400, "duplicate must reference another valid finding in this room");
+    }
+    newSeverity = original.final_severity;
+    newDuplicateOf = original.id;
+  }
+
+  database.transaction(() => {
+    const changed = database
+      .prepare(
+        `UPDATE appeals SET status = ?, reviewer = ?, decision_reasoning = ?, new_verdict = ?, new_severity = ?,
+           new_duplicate_of = ?, decided_at = ? WHERE id = ? AND status = 'open'`,
+      )
+      .run(input.decision, reviewer.toLowerCase(), input.reasoning, newVerdict, newSeverity, newDuplicateOf, nowSec(), appeal.id);
+    if (changed.changes !== 1) throw new HttpError(409, "only an open appeal may be decided");
+    if (input.decision === "overturned") {
+      database
+        .prepare("UPDATE findings SET verdict = ?, final_severity = ?, duplicate_of = ? WHERE id = ?")
+        .run(newVerdict, newSeverity, newDuplicateOf, finding.id);
+    }
+  })();
+}
+
 export async function adjudicate(findingId: number, moderator: string, input: z.infer<typeof Adjudication>) {
   const f = requireFinding(findingId);
   const room = requireRoom(f.room_id);
   if (room.moderator !== moderator) throw new HttpError(403, "only this room's moderator can adjudicate");
+  if (appealForFinding(f.id)) throw new HttpError(409, "this finding has been appealed and can no longer be adjudicated");
   const phase = phaseOf(room, await chainNow());
   if (phase !== "review") throw new HttpError(409, `adjudication happens during peer review (room is ${phase})`);
   if (f.status !== "committed") throw new HttpError(409, "only committed findings can be adjudicated");
@@ -399,20 +541,24 @@ export async function settlementPreview(roomId: number) {
     phase: phaseOf(room, await chainNow()),
     plan,
     pendingVerdicts: pending,
-    findings: rows.map((f, i) => ({
-      id: f.id,
-      title: f.title,
-      author: f.author,
-      commitmentIndex: f.commitment_index,
-      revealed: list[i].revealed,
-      claimedSeverity: f.claimed_severity,
-      verdict: f.verdict,
-      finalSeverity: f.final_severity,
-      duplicateOf: f.duplicate_of,
-      reasoning: f.verdict_reasoning,
-      materialReviewers: list[i].materialReviewers,
-      counts: counts.get(f.id) ?? {},
-    })),
+    findings: rows.map((f, i) => {
+      const appeal = appealForFinding(f.id);
+      return {
+        id: f.id,
+        title: f.title,
+        author: f.author,
+        commitmentIndex: f.commitment_index,
+        revealed: list[i].revealed,
+        claimedSeverity: f.claimed_severity,
+        verdict: f.verdict,
+        finalSeverity: f.final_severity,
+        duplicateOf: f.duplicate_of,
+        reasoning: f.verdict_reasoning,
+        materialReviewers: list[i].materialReviewers,
+        counts: counts.get(f.id) ?? {},
+        appeal: appeal ? publicAppeal(appeal) : null,
+      };
+    }),
   };
 }
 
@@ -425,6 +571,8 @@ export async function prepareSettlement(roomId: number, moderator: string) {
   const { room, plan } = preview;
   if (room.moderator !== moderator) throw new HttpError(403, "only this room's moderator can settle");
   if (preview.phase !== "review") throw new HttpError(409, `settlement happens during peer review (room is ${preview.phase})`);
+  const openAppeals = preview.findings.flatMap((finding) => (finding.appeal?.status === "open" ? [finding.appeal.id] : []));
+  if (openAppeals.length) throw new HttpError(409, `resolve open appeals first (#${openAppeals.join(", #")})`);
   const pending = preview.findings.filter((f) => f.revealed && !f.verdict);
   if (pending.length) throw new HttpError(409, `adjudicate every revealed finding first (#${pending.map((f) => f.id).join(", #")})`);
 
@@ -447,6 +595,18 @@ export async function prepareSettlement(roomId: number, moderator: string) {
       duplicateOf: f.duplicateOf,
       reasoning: f.reasoning,
       materialReviewers: f.materialReviewers,
+      appeal: f.appeal
+        ? {
+            appellant: f.appeal.appellant,
+            reason: f.appeal.reason,
+            status: f.appeal.status,
+            reviewer: f.appeal.reviewer,
+            decisionReasoning: f.appeal.decisionReasoning,
+            newVerdict: f.appeal.newVerdict,
+            newSeverity: f.appeal.newSeverity,
+            newDuplicateOf: f.appeal.newDuplicateOf,
+          }
+        : null,
     })),
     awards: {
       discoveries: plan.discoveries.map((d) => ({ ...d, amount: d.amount.toString() })),

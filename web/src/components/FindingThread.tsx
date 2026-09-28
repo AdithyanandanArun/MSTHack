@@ -72,9 +72,30 @@ export interface FindingDetail {
     votes: number;
     votedByMe: boolean;
   };
+  appeal: {
+    id: number;
+    appellant: string;
+    reason: string;
+    status: "open" | "upheld" | "overturned";
+    reviewer: string | null;
+    decisionReasoning: string | null;
+    newVerdict: "valid" | "duplicate" | "invalid" | "inconclusive" | null;
+    newSeverity: Severity | null;
+    newDuplicateOf: number | null;
+    createdAt: number;
+    decidedAt: number | null;
+  } | null;
   comments: Comment[];
   evidenceRuns: Record<string, { id: number; status: string; outcome: string | null; reportHash: string | null; report: EvidenceReport | null } | null>;
-  viewer: { address: string | null; allowedKinds: CommentKind[]; isAuthor: boolean; isRoomModerator: boolean; isDeveloper: boolean };
+  viewer: {
+    address: string | null;
+    allowedKinds: CommentKind[];
+    isAuthor: boolean;
+    isRoomModerator: boolean;
+    isDeveloper: boolean;
+    canAppeal: boolean;
+    canDecideAppeal: boolean;
+  };
 }
 
 export function FindingThread({ d, now, explorer }: { d: FindingDetail; now: number; explorer: string | null }) {
@@ -264,6 +285,39 @@ export function FindingThread({ d, now, explorer }: { d: FindingDetail; now: num
             </div>
           )}
 
+          {d.appeal && (
+            <div className="card mt-3" style={{ borderColor: d.appeal.status === "open" ? "var(--attention)" : "var(--done)" }}>
+              <div className="card-header py-2 text-sm">
+                <span className="flex items-center gap-2">
+                  <b>Appeal</b>
+                  <Label tone={d.appeal.status === "open" ? "attention" : d.appeal.status === "overturned" ? "accent" : "done"}>
+                    {d.appeal.status}
+                  </Label>
+                </span>
+                <span className="text-xs muted">filed {timeAgo(d.appeal.createdAt, now)}</span>
+              </div>
+              <div className="space-y-3 p-4 text-sm">
+                <div>
+                  <div className="mb-1 text-xs font-semibold muted"><Researcher who={{ address: d.appeal.appellant }} role="appellant" /> wrote</div>
+                  <Markdown>{d.appeal.reason}</Markdown>
+                </div>
+                {d.appeal.reviewer && (
+                  <div className="border-t pt-3" style={{ borderColor: "var(--border-muted)" }}>
+                    <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-semibold muted">
+                      <Researcher who={{ address: d.appeal.reviewer }} role="reviewer" /> decided {d.appeal.status}
+                      {d.appeal.status === "overturned" && <VerdictLabel verdict={d.appeal.newVerdict} />}
+                      {d.appeal.status === "overturned" && <SeverityLabel severity={d.appeal.newSeverity} />}
+                      {d.appeal.newDuplicateOf && (
+                        <span>duplicate of <Link href={`/rooms/${d.room.id}/findings/${d.appeal.newDuplicateOf}`}>#{d.appeal.newDuplicateOf}</Link></span>
+                      )}
+                    </div>
+                    <Markdown>{d.appeal.decisionReasoning ?? ""}</Markdown>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {error && <div className="flash flash-error mt-3">{error}</div>}
 
           {d.viewer.allowedKinds.length > 0 ? (
@@ -336,7 +390,11 @@ export function FindingThread({ d, now, explorer }: { d: FindingDetail; now: num
 
           <ReproducePanel findingId={f.id} canRun={signedIn && d.room.phase !== "hunting" || d.viewer.isAuthor} onResult={setMyRun} />
 
-          {d.viewer.isRoomModerator && d.room.phase === "review" && f.status === "committed" && (
+          {d.viewer.canAppeal && <AppealForm findingId={f.id} onDone={() => router.refresh()} />}
+
+          {d.viewer.canDecideAppeal && d.appeal && <AppealDecisionForm appeal={d.appeal} finding={f} onDone={() => router.refresh()} />}
+
+          {d.viewer.isRoomModerator && d.room.phase === "review" && f.status === "committed" && !d.appeal && (
             <AdjudicationForm
               findingId={f.id}
               current={f}
@@ -417,6 +475,124 @@ function ReproducePanel({ findingId, canRun, onResult }: { findingId: number; ca
         </div>
       )}
       {error && <div className="flash flash-error mt-2">{error}</div>}
+    </SideBox>
+  );
+}
+
+function AppealForm({ findingId, onDone }: { findingId: number; onDone: () => void }) {
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async () => {
+    setError(null);
+    setSubmitting(true);
+    try {
+      await api(`/api/findings/${findingId}/appeals`, { method: "POST", json: { reason } });
+      onDone();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  return (
+    <SideBox title="Appeal this verdict">
+      <div className="space-y-2">
+        <textarea
+          className="input min-h-28"
+          placeholder="Explain why the recorded verdict should be reviewed (20 characters minimum)."
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          maxLength={5_000}
+        />
+        <button className="btn btn-primary w-full" disabled={submitting || reason.trim().length < 20} onClick={submit}>
+          {submitting ? "Filing appeal…" : "File appeal"}
+        </button>
+        {error && <div className="flash flash-error">{error}</div>}
+      </div>
+    </SideBox>
+  );
+}
+
+function AppealDecisionForm({
+  appeal,
+  finding,
+  onDone,
+}: {
+  appeal: NonNullable<FindingDetail["appeal"]>;
+  finding: FindingDetail["finding"];
+  onDone: () => void;
+}) {
+  const [decision, setDecision] = useState<"upheld" | "overturned">("upheld");
+  const [verdict, setVerdict] = useState<"valid" | "duplicate" | "invalid" | "inconclusive">(
+    finding.verdict === "valid" || finding.verdict === "duplicate" || finding.verdict === "invalid" || finding.verdict === "inconclusive"
+      ? finding.verdict
+      : "valid",
+  );
+  const [severity, setSeverity] = useState<Severity>((finding.finalSeverity as Severity) ?? finding.claimedSeverity);
+  const [duplicateOf, setDuplicateOf] = useState(finding.duplicateOf ? String(finding.duplicateOf) : "");
+  const [reasoning, setReasoning] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submit = async () => {
+    setError(null);
+    setSubmitting(true);
+    try {
+      await api(`/api/appeals/${appeal.id}/decide`, {
+        method: "POST",
+        json: {
+          decision,
+          reasoning,
+          newVerdict: decision === "overturned" ? verdict : undefined,
+          newSeverity: decision === "overturned" && verdict === "valid" ? severity : undefined,
+          newDuplicateOf: decision === "overturned" && verdict === "duplicate" ? Number(duplicateOf) : undefined,
+        },
+      });
+      onDone();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  const invalidDuplicate = decision === "overturned" && verdict === "duplicate" && !duplicateOf;
+  return (
+    <SideBox title="Moderator: decide appeal">
+      <div className="space-y-2">
+        <select className="input" value={decision} onChange={(e) => setDecision(e.target.value as "upheld" | "overturned")}>
+          <option value="upheld">Uphold verdict</option>
+          <option value="overturned">Overturn verdict</option>
+        </select>
+        {decision === "overturned" && (
+          <>
+            <select className="input" value={verdict} onChange={(e) => setVerdict(e.target.value as typeof verdict)}>
+              <option value="valid">Valid</option>
+              <option value="duplicate">Independent duplicate</option>
+              <option value="invalid">Invalid</option>
+              <option value="inconclusive">Inconclusive</option>
+            </select>
+            {verdict === "valid" && (
+              <select className="input" value={severity} onChange={(e) => setSeverity(e.target.value as Severity)}>
+                {SEVERITIES.map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            )}
+            {verdict === "duplicate" && (
+              <input className="input" placeholder="original valid finding #" value={duplicateOf} onChange={(e) => setDuplicateOf(e.target.value.replace(/\D/g, ""))} />
+            )}
+          </>
+        )}
+        <textarea
+          className="input min-h-24"
+          placeholder="Public decision reasoning (required)"
+          value={reasoning}
+          onChange={(e) => setReasoning(e.target.value)}
+          maxLength={10_000}
+        />
+        <button className="btn btn-primary w-full" disabled={submitting || reasoning.trim().length < 10 || invalidDuplicate} onClick={submit}>
+          {submitting ? "Recording decision…" : decision === "upheld" ? "Uphold verdict" : "Overturn verdict"}
+        </button>
+        {error && <div className="flash flash-error">{error}</div>}
+      </div>
     </SideBox>
   );
 }
