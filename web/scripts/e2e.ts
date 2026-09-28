@@ -417,6 +417,33 @@ async function main() {
   const after = await pub.getBalance({ address: alice.account.address });
   assert(after - before + wr.gasUsed * wr.effectiveGasPrice === a0, "alice's balance grew by exactly her award (net of gas)");
 
+  console.log("• release security history and developer track record");
+  type Hist = {
+    disclaimer: string;
+    releases: { version: string; phase: string; summary: string; acceptedFindings: { total: number; final: boolean; bySeverity: Record<string, number> } }[];
+  };
+  const hist = await new Actor("anon", dave.account).ok<Hist>("GET", "/api/packages/npm/releasebond-demo-telemetry");
+  const rel = hist.releases[0];
+  assert(
+    hist.releases.length === 1 && rel.version === "2.0.0" && rel.phase === "settled" && rel.acceptedFindings.total === 1 && rel.acceptedFindings.bySeverity.high === 1 && rel.acceptedFindings.final,
+    "package history lists the reviewed release with its accepted findings",
+  );
+  const withoutDisclaimer = JSON.stringify(hist).replace(hist.disclaimer, "");
+  assert(
+    !/\bsafe\b/i.test(withoutDisclaimer) && /does not prove the absence of vulnerabilities/.test(hist.disclaimer) && rel.summary.includes("completed a ReleaseBond security review"),
+    "package history API is decision support, not a safety verdict",
+  );
+  const track = await new Actor("anon", dave.account).ok<{
+    releasesFunded: number;
+    releasesReviewed: number;
+    poolsFundedWei: string;
+    acceptedFindings: { total: number; bySeverity: Record<string, number> };
+  }>("GET", `/api/developers/${dev.address}`);
+  assert(
+    track.releasesFunded === 1 && track.releasesReviewed === 1 && track.poolsFundedWei === bounty.toString() && track.acceptedFindings.bySeverity.high === 1,
+    "developer track record shows funded pools and accepted findings",
+  );
+
   console.log("• public disclosure after settlement and server-rendered pages");
   const anon = new Actor("anon", dave.account);
   assert((await anon.req("GET", `/api/findings/${aliceF.id}`)).status === 200, "settled findings are public");
@@ -428,6 +455,8 @@ async function main() {
     [`/rooms/${roomId}/findings/${aliceF.id}`, "postinstall reads ~/.ssh keys"],
     [`/researchers/${alice.address}`, "On-chain security reputation"],
     ["/admin", "Contract deployment"],
+    ["/packages/npm/releasebond-demo-telemetry", "Release security history"],
+    [`/researchers/${dev.address}`, "Review track record"],
   ] as const) {
     const r = await anon.req<string>("GET", p, undefined, true);
     assert(r.status === 200 && r.data.includes(needle), `page ${p} renders`);
