@@ -75,6 +75,7 @@ Use `npm run advance-time -- 600` to move a room from hunting to disclosure to r
 3. Open `/admin`, connect Bridgekey, sign in, and click **Deploy ReleaseBond from my wallet**. The server reads the receipt, checks that the runtime bytecode matches this build, and stores the address. Add more moderators on the same page.
 
    *Alternative:* put `PRIVATE_KEY=` in `contracts/.env`, run `npm run deploy:mst`, then restart the web app (it picks up `contracts/deployments/mstTestnet.json`).
+4. Publish the verified source on MST Testnet's explorer with `npm --prefix contracts run verify:mst -- --address <deployed address> --owner <owner>`. Use the same owner address passed to the constructor during deployment.
 
 ## Hero demo script (about 5 minutes, local or MST)
 
@@ -98,13 +99,14 @@ npm run gates     # runs every automated gate below
 |---|---|---|
 | G1 | `scripts/check-contracts.mjs` | 25 contract tests: escrow, commit/reveal, settlement caps, refunds, access control, moderator panels |
 | G2 | `scripts/check-mst-testnet.mjs` | live MST Testnet accepts the bytecode (chain ID and deploy gas estimate) |
-| G3 | `scripts/check-web-unit.mjs` | 42 unit tests: Solidity hash parity, rule positive/negative controls, sandbox parser, visibility, payout |
+| G3 | `scripts/check-web-unit.mjs` | 45 unit tests: Solidity hash parity, rule positive/negative controls, sandbox parser, visibility, payout |
 | G4 | `scripts/check-web-build.mjs` | typecheck + lint (0 warnings) + production build |
-| G5 | `scripts/check-e2e.mjs` | 93-check lifecycle (including verified-only rooms, appeals, moderator panel approval, in-app deploy verification, rate limits and upload quota) on a fresh chain through the real HTTP API and production server |
+| G5 | `scripts/check-e2e.mjs` | 105-check lifecycle (including verified-only rooms, appeals, moderator panels and queue, track records, health, in-app deploy verification, rate limits and upload quota) on a fresh chain through the real HTTP API and production server |
 | G6 | `scripts/check-sandbox.mjs` | Docker sandbox sees key read, egress, secret env and install hook, and stays silent on the benign control |
 | G7 | `scripts/check-pacman.mjs` | real Arch package fetched, checksum-verified against the repo DB, normalized |
 | G18 | `scripts/check-explorer.mjs` | explorer links resolve on MST Testnet's Blockscout (positive and negative control) |
 | G19 | `scripts/check-backup.mjs` | backup restores byte-identical rows and files; tampered backup refused |
+| G25 | `scripts/check-verify-payload.mjs` | Blockscout verification payload recompiles offline to the exact contract bytecode |
 | G8 | `scripts/check-repo.mjs` | history, no co-author trailers, pushed and clean |
 
 ## REST API (selected)
@@ -125,6 +127,12 @@ npm run gates     # runs every automated gate below
 | GET/POST | `/api/rooms/:id/settlement` | preview / freeze the adjudication record and return `finalizeSettlement` args |
 | POST | `/api/rooms/:id/scan` | queues a release triage (no researcher claim); returns `202 {id}` |
 | POST | `/api/uploads` | proof files; their sha256 is bound into the report hash |
+| GET | `/api/packages/:ecosystem/:name` | release security history of a package (JSON for CI/CD; never a safety verdict) |
+| GET | `/api/developers/:address` | developer review track record |
+| GET | `/api/moderators/:address` | moderator track record: rooms, verdicts issued, appeal outcomes, missed deadlines |
+| GET | `/api/researchers/:address` | on-chain reputation plus findings overturned on appeal |
+| GET | `/api/moderation/queue` | signed-in moderator's queue: pending verdicts, appeals to decide, panel approvals, deadlines |
+| GET | `/api/health` | readiness: database, chain id, contract, indexer lag, evidence queue (503 when down) |
 
 ## Trust model (what is and is not on-chain)
 

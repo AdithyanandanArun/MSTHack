@@ -20,6 +20,7 @@ Run `npm run gates` to re-verify everything. Expected: 8 × PASS. G5/G6 need Doc
 3. Connect Bridgekey → sign in → **Deploy ReleaseBond from my wallet** (≈0.0033 MSTC). The server verifies the bytecode and stores the address in `web/data/releasebond.sqlite` (`settings` table, key `contract:91562037`).
 4. For a shared or production deployment, also pin it in env: `RELEASEBOND_CONTRACT_ADDRESS=0x…` and `RELEASEBOND_DEPLOY_BLOCK=<block>`. Without the deploy block, the indexer would scan from genesis (about 5.8M blocks in 5k chunks).
 5. Record the address and tx in GATES.md G9 `EVIDENCE:` and in the README.
+6. Publish the verified source on the explorer: `npm --prefix contracts run verify:mst -- --address <address> --owner <owner>`. The payload is proven offline (G25) to recompile to the exact bytecode, and MST's Blockscout supports standard-input verification with solc `v0.8.28+commit.7893614a`. The real submission is untested until the contract is deployed.
 
 **Untested with the real extension:** no browser was available in the build environment, so Bridgekey itself was never clicked through. The wallet code (`web/src/components/WalletProvider.tsx`) discovers wallets via **EIP-6963** and falls back to `window.ethereum`. If Bridgekey injects under another global, add it in the discovery `useEffect`. Chain switching uses `wallet_switchEthereumChain` and falls back to `wallet_addEthereumChain`.
 
@@ -48,6 +49,14 @@ Run `npm run gates` to re-verify everything. Expected: 8 × PASS. G5/G6 need Doc
 8. **Hardening**: done — per-wallet rate limits on every write endpoint (sign-in is limited per claimed wallet plus a high global nonce cap, never one shared bucket), per-wallet upload quota, and `npm run backup` / `npm run restore` (consistent SQLite snapshot plus files, sha256 manifest, verified staged restore that rewrites absolute paths). The session secret is already persistent (`data/session.secret`, mode 600, included in backups) unless you set `SESSION_SECRET`. The limiter is in-memory, so move it to Redis for several instances.
 9. The researcher's reveal **nonce is stored server-side** (plus a localStorage backup in the browser), trading some trust for recoverability. The alternative is client-only storage with an export or backup UX.
 10. Explorer links are verified: testnet.mstscan.com is Blockscout, and `/tx/<hash>` and `/address/<addr>` resolve (`scripts/check-explorer.mjs`). Blockscout also has a contract-verification API; publishing the ReleaseBond source there after G9 is a nice next step.
+
+## Backend status (audited against the spec)
+
+Every backend requirement in the spec is implemented and covered by gates, except the items that need an owner: G9 (deploy), G10–G12 (the npm dependency and pacman sandboxes, abandoned pending a test approach) and the Claude agent (needs an API key). The most recent additions are:
+- **Moderation queue** (`/api/moderation/queue`, dashboard): pending verdicts, appeals this moderator may decide, panel settlements awaiting their signature, deadlines.
+- **Moderator track record** (§33 "moderator histories"): `/api/moderators/:address` and the profile page. It counts the verdicts a moderator *issued*, even when an appeal later overturned them.
+- **Findings overturned on appeal** (§26) and **unresolved objections** (§15). Appeals record the contested verdict at filing time.
+- **`/api/health`** (built by Codex): 503 on DB failure, unreachable RPC or wrong chain; 200 "degraded" on a missing contract, indexer lag or queue backlog. Use it for uptime monitoring.
 
 ## Recently added (spec §25, §27, §43)
 
