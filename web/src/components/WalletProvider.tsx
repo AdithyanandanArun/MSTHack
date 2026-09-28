@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   createPublicClient,
@@ -87,6 +88,7 @@ const DEV_ROLES = ["owner / moderator", "developer", "researcher A", "researcher
 const LAST_WALLET = "rb:last-wallet";
 
 export function WalletProvider({ config, children }: { config: ClientConfig; children: React.ReactNode }) {
+  const router = useRouter();
   const chain = useMemo(() => chainByKey(config.chainKey), [config.chainKey]);
   const publicClient = useMemo(
     () => createPublicClient({ chain, transport: http("/api/rpc") }) as PublicClient,
@@ -268,10 +270,11 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
       }
       await api("/api/auth/verify", { method: "POST", json: { message, signature, scheme } });
       await refreshSession();
+      router.refresh(); // re-render server components (dashboard, room visibility) for the new session
     } finally {
       setBusy(null);
     }
-  }, [account, config.chainId, walletClient, ensureChain, refreshSession]);
+  }, [account, config.chainId, walletClient, ensureChain, refreshSession, router]);
 
   const sendTx = useCallback<WalletState["sendTx"]>(
     async (label, send) => {
