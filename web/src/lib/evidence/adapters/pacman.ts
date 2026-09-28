@@ -1,7 +1,7 @@
 import zlib from "node:zlib";
 import tar from "tar-stream";
 import { Readable } from "node:stream";
-import { decompress, fetchBuffer, fetchFirst, readTarball, sha256Hex } from "../archive";
+import { decompress, fetchBuffer, fetchFirst, fetchRetry, readTarball, sha256Hex } from "../archive";
 import type { ArtifactFile, ReleaseArtifact } from "../types";
 
 const ARCHIVE = process.env.ARCH_ARCHIVE_URL || "https://archive.archlinux.org/packages";
@@ -28,7 +28,7 @@ interface SearchResult {
 }
 
 async function search(name: string): Promise<SearchResult | null> {
-  const res = await fetch(`${SEARCH}?name=${encodeURIComponent(name)}`);
+  const res = await fetchRetry(`${SEARCH}?name=${encodeURIComponent(name)}`);
   if (!res.ok) throw new Error(`archlinux.org search returned ${res.status}`);
   const j = (await res.json()) as { results: SearchResult[] };
   return j.results.find((r) => r.pkgname === name && (r.arch === ARCH || r.arch === "any")) ?? null;
@@ -65,7 +65,7 @@ export function vercmp(a: string, b: string): number {
 }
 
 async function archivedVersions(name: string): Promise<{ version: string; file: string }[]> {
-  const res = await fetch(`${ARCHIVE}/${name[0]}/${name}/`);
+  const res = await fetchRetry(`${ARCHIVE}/${name[0]}/${name}/`);
   if (!res.ok) return [];
   const html = await res.text();
   const re = new RegExp(`href="(${name.replace(/[.+]/g, "\\$&")}-([^"]+)-(${ARCH}|any)\\.pkg\\.tar\\.(zst|xz))"`, "g");

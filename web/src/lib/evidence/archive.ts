@@ -108,12 +108,36 @@ export async function readTarball(
   return files;
 }
 
+const UA = { "user-agent": "ReleaseBond/0.1 (+evidence-engine)" };
+
+/**
+ * fetch() with retries on network errors and 5xx. Every registry, mirror and
+ * archive request goes through here: those hosts intermittently reset
+ * connections, and one reset should not fail an artifact registration.
+ */
+export async function fetchRetry(url: string, init: RequestInit = {}, attempts = 4): Promise<Response> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, {
+        redirect: "follow",
+        ...init,
+        headers: { ...UA, ...(init.headers as Record<string, string> | undefined) },
+        signal: AbortSignal.timeout(120_000),
+      });
+      if (res.status < 500) return res;
+      last = new Error(`GET ${url} -> ${res.status}`);
+    } catch (e) {
+      const cause = (e as { cause?: { code?: string; message?: string } }).cause;
+      last = new Error(`GET ${url} failed: ${cause?.code ?? cause?.message ?? (e as Error).message}`);
+    }
+    await new Promise((r) => setTimeout(r, 750 * 2 ** i));
+  }
+  throw last;
+}
+
 async function fetchOnce(url: string, maxBytes: number): Promise<Buffer> {
-  const res = await fetch(url, {
-    redirect: "follow",
-    headers: { "user-agent": "ReleaseBond/0.1 (+evidence-engine)" },
-    signal: AbortSignal.timeout(120_000),
-  });
+  const res = await fetchRetry(url, {}, 1);
   if (!res.ok) throw Object.assign(new Error(`GET ${url} -> ${res.status}`), { status: res.status });
   const len = Number(res.headers.get("content-length") || 0);
   if (len > maxBytes) throw Object.assign(new Error(`artifact too large (${len} bytes)`), { status: 413 });

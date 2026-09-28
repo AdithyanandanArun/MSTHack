@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import semver from "semver";
-import { fetchBuffer, readTarball, sha256Hex } from "../archive";
+import { fetchBuffer, fetchRetry, readTarball, sha256Hex } from "../archive";
 import type { ReleaseArtifact } from "../types";
 
 const REGISTRY = process.env.NPM_REGISTRY_URL || "https://registry.npmjs.org";
@@ -18,7 +18,7 @@ interface Packument {
 }
 
 async function packument(name: string): Promise<Packument> {
-  const res = await fetch(`${REGISTRY}/${encodeName(name)}`, {
+  const res = await fetchRetry(`${REGISTRY}/${encodeName(name)}`, {
     headers: { accept: "application/vnd.npm.install-v1+json" },
   });
   if (res.status === 404) throw new Error(`npm package ${name} not found`);
