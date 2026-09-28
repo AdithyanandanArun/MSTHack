@@ -24,3 +24,6 @@ web/data/
 web/*.tsbuildinfo
 web/data-local/
 contracts/deployments/localhost.json
+
+# local knowledge graph (regenerate with `graphify update .`)
+graphify-out/
