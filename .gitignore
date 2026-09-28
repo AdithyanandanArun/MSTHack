@@ -27,3 +27,4 @@ contracts/deployments/localhost.json
 
 # local knowledge graph (regenerate with `graphify update .`)
 graphify-out/
+web/.next-local/

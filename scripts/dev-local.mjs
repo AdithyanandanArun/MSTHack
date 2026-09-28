@@ -10,6 +10,7 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const contracts = path.join(root, "contracts");
 const web = path.join(root, "web");
 const RPC = "http://127.0.0.1:8545";
+const PORT = process.env.WEB_PORT || "3000";
 const kids = [];
 const stop = () => kids.forEach((k) => { try { process.kill(-k.pid, "SIGTERM"); } catch { /* gone */ } });
 process.on("SIGINT", () => { stop(); process.exit(0); });
@@ -48,14 +49,15 @@ if (needDeploy) {
   fs.rmSync(path.join(web, "data-local"), { recursive: true, force: true });
 }
 const docker = spawnSync("docker", ["info"], { stdio: "ignore" }).status === 0;
-console.log(`\nReleaseBond local demo -> http://localhost:3000  (dev wallets: Dev #0 owner/moderator, #1 developer, #2-#4 researchers)\n`);
+console.log(`\nReleaseBond local demo -> http://localhost:${PORT}  (dev wallets: Dev #0 owner/moderator, #1 developer, #2-#4 researchers)\n`);
 kids.push(
-  spawn("npx", ["next", "dev", "-p", "3000"], {
+  spawn("npx", ["next", "dev", "-p", PORT], {
     cwd: web,
     stdio: "inherit",
     detached: true,
     env: {
       ...process.env,
+      NEXT_DIST_DIR: ".next-local",
       RELEASEBOND_CHAIN: "localhost",
       RELEASEBOND_RPC_URL: RPC,
       RELEASEBOND_DATA_DIR: path.join(web, "data-local"),
