@@ -246,7 +246,11 @@ function migrate(conn: Database.Database) {
   add("appeals", "original_severity", "TEXT");
 }
 
-type GlobalWithDb = typeof globalThis & { __releasebondDb?: Database.Database };
+type GlobalWithDb = typeof globalThis & { __releasebondDb?: Database.Database; __releasebondDbSchema?: string };
+
+// The connection outlives dev hot reloads, so the (idempotent) schema and migrations are re-applied
+// whenever their code changes, not only when the connection is first opened.
+const SCHEMA_KEY = SCHEMA + migrate.toString();
 
 export function db(): Database.Database {
   const g = globalThis as GlobalWithDb;
@@ -256,9 +260,12 @@ export function db(): Database.Database {
     conn.pragma("journal_mode = WAL");
     conn.pragma("foreign_keys = ON");
     conn.pragma("busy_timeout = 5000");
-    conn.exec(SCHEMA);
-    migrate(conn);
     g.__releasebondDb = conn;
+  }
+  if (g.__releasebondDbSchema !== SCHEMA_KEY) {
+    g.__releasebondDb.exec(SCHEMA);
+    migrate(g.__releasebondDb);
+    g.__releasebondDbSchema = SCHEMA_KEY;
   }
   return g.__releasebondDb;
 }
