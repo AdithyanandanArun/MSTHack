@@ -22,7 +22,7 @@ export function DeployContract({ hasContract, isOwner }: { hasContract: boolean;
       // sendTx indexes via /api/chain/sync, which needs a configured contract;
       // registration below handles a fresh deployment, so ignore that step's result.
       await sendTx("Deploy ReleaseBond", async (w, acct) => {
-        txHash = await w.deployContract({ abi: releaseBondAbi, bytecode: releaseBondBytecode, args: [acct], account: acct, chain: w.chain });
+        txHash = await w.deployContract({ abi: releaseBondAbi, bytecode: releaseBondBytecode, args: [acct], chain: w.chain });
         return txHash;
       }).catch(async (e) => {
         if (!txHash) throw e;
@@ -61,8 +61,8 @@ export function ModeratorAdmin({ moderators }: { moderators: string[] }) {
     setError(null);
     try {
       if (!isAddress(a)) throw new Error("enter a valid address");
-      await sendTx(enabled ? "Add moderator" : "Remove moderator", (w, acct) =>
-        w.writeContract({ address: config.contractAddress as Address, abi: releaseBondAbi, functionName: "setModerator", args: [a as Address, enabled], account: acct, chain: w.chain }),
+      await sendTx(enabled ? "Add moderator" : "Remove moderator", (w) =>
+        w.writeContract({ address: config.contractAddress as Address, abi: releaseBondAbi, functionName: "setModerator", args: [a as Address, enabled], chain: w.chain }),
       );
       setAddr("");
       router.refresh();

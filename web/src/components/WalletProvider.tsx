@@ -8,10 +8,13 @@ import {
   getAddress,
   http,
   numberToHex,
+  type Account,
   type Address,
+  type Chain,
   type EIP1193Provider,
   type Hash,
   type PublicClient,
+  type Transport,
   type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -57,12 +60,15 @@ interface WalletState {
   disconnect: () => Promise<void>;
   signIn: () => Promise<void>;
   /** Sends a transaction via the wallet, waits for it, and has the server index it. */
-  sendTx: (label: string, send: (wallet: WalletClient, account: Address) => Promise<Hash>) => Promise<Hash>;
+  sendTx: (label: string, send: (wallet: SigningClient, account: Address) => Promise<Hash>) => Promise<Hash>;
   publicClient: PublicClient;
   refreshSession: () => Promise<void>;
   /** EIP-712 signature from the connected wallet (no transaction, no gas). */
-  signTyped: (args: Omit<Parameters<WalletClient["signTypedData"]>[0], "account">) => Promise<`0x${string}`>;
+  signTyped: (args: Omit<Parameters<SigningClient["signTypedData"]>[0], "account">) => Promise<`0x${string}`>;
 }
+
+/** A wallet client that always carries its signing account, so calls never need an `account` override. */
+export type SigningClient = WalletClient<Transport, Chain, Account>;
 
 const Ctx = createContext<WalletState | null>(null);
 
@@ -193,7 +199,9 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
     await refreshSession();
   }, [refreshSession]);
 
-  const walletClient = useCallback((): WalletClient => {
+  // Callers must sign with the client's own account: a local key for dev wallets. Passing a bare
+  // address instead makes viem send personal_sign / eth_sendTransaction to /api/rpc, which only allows reads.
+  const walletClient = useCallback((): SigningClient => {
     const opt = activeRef.current;
     if (!opt || !account) throw new Error("connect a wallet first");
     if (opt.kind === "dev") {
@@ -245,7 +253,7 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
         nonce,
         issuedAt: new Date(),
       });
-      const signature = await walletClient().signMessage({ account, message });
+      const signature = await walletClient().signMessage({ message });
       await api("/api/auth/verify", { method: "POST", json: { message, signature } });
       await refreshSession();
     } finally {
@@ -281,7 +289,7 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
       setBusy("Approve in your wallet…");
       try {
         await ensureChain();
-        return await walletClient().signTypedData({ ...args, account } as Parameters<WalletClient["signTypedData"]>[0]);
+        return await walletClient().signTypedData(args as Parameters<SigningClient["signTypedData"]>[0]);
       } finally {
         setBusy(null);
       }

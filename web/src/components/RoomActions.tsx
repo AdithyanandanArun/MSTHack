@@ -49,13 +49,12 @@ export function RoomActions(props: {
     act("Reveal", async () => {
       const detail = await api<{ finding: { findingHash: Hex; nonce: Hex | null } }>(`/api/findings/${t.findingId}`);
       if (!detail.finding.nonce) throw new Error("nonce unavailable");
-      await sendTx("Reveal finding", (w, acct) =>
+      await sendTx("Reveal finding", (w) =>
         w.writeContract({
           address,
           abi: releaseBondAbi,
           functionName: "revealFinding",
           args: [BigInt(props.roomId), t.commitmentIndex, detail.finding.findingHash, detail.finding.nonce as Hex],
-          account: acct,
           chain: w.chain,
         }),
       );
@@ -76,8 +75,8 @@ export function RoomActions(props: {
               className="btn"
               onClick={() =>
                 act("Increase bounty", () =>
-                  sendTx("Increase bounty", (w, acct) =>
-                    w.writeContract({ address, abi: releaseBondAbi, functionName: "increaseBounty", args: [BigInt(props.roomId)], value: parseEther(topUp || "0"), account: acct, chain: w.chain }),
+                  sendTx("Increase bounty", (w) =>
+                    w.writeContract({ address, abi: releaseBondAbi, functionName: "increaseBounty", args: [BigInt(props.roomId)], value: parseEther(topUp || "0"), chain: w.chain }),
                   ),
                 )
               }
@@ -91,8 +90,8 @@ export function RoomActions(props: {
             className="btn"
             onClick={() =>
               act("Reclaim", () =>
-                sendTx("Reclaim unused pool", (w, acct) =>
-                  w.writeContract({ address, abi: releaseBondAbi, functionName: "reclaimUnused", args: [BigInt(props.roomId)], account: acct, chain: w.chain }),
+                sendTx("Reclaim unused pool", (w) =>
+                  w.writeContract({ address, abi: releaseBondAbi, functionName: "reclaimUnused", args: [BigInt(props.roomId)], chain: w.chain }),
                 ),
               )
             }
@@ -105,8 +104,8 @@ export function RoomActions(props: {
             className="btn btn-danger"
             onClick={() =>
               act("Refund", () =>
-                sendTx("Return expired pool", (w, acct) =>
-                  w.writeContract({ address, abi: releaseBondAbi, functionName: "refundExpired", args: [BigInt(props.roomId)], account: acct, chain: w.chain }),
+                sendTx("Return expired pool", (w) =>
+                  w.writeContract({ address, abi: releaseBondAbi, functionName: "refundExpired", args: [BigInt(props.roomId)], chain: w.chain }),
                 ),
               )
             }

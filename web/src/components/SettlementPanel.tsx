@@ -102,13 +102,12 @@ export function SettlementPanel(props: {
     try {
       const a = awardArgs(record);
       const signatures = (panel?.approvals ?? []).map((x) => x.signature);
-      await sendTx("Finalize settlement", (w, acct) =>
+      await sendTx("Finalize settlement", (w) =>
         w.writeContract({
           address: config.contractAddress as Address,
           abi: releaseBondAbi,
           functionName: "finalizeSettlement",
           args: [BigInt(props.roomId), a.discoveries, a.reviews, a.rejected, recomputed, signatures],
-          account: acct,
           chain: w.chain,
         }),
       );

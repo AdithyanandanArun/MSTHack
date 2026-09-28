@@ -99,7 +99,7 @@ export function NewRoomForm() {
           panelQuorum: panel.length ? Math.min(panelQuorum, panel.length) : 0,
         } },
       );
-      const hash = await sendTx("Lock bounty", (wallet, acct) =>
+      const hash = await sendTx("Lock bounty", (wallet) =>
         wallet.writeContract({
           address: draft.contract,
           abi: releaseBondAbi,
@@ -113,7 +113,6 @@ export function NewRoomForm() {
             },
           ],
           value,
-          account: acct,
           chain: wallet.chain,
         }),
       );

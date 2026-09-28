@@ -144,19 +144,18 @@ export function FindingThread({ d, now, explorer }: { d: FindingDetail; now: num
 
   const commitDraft = () =>
     act(() =>
-      sendTx("Commit finding", (w, acct) =>
-        w.writeContract({ address: config.contractAddress as Address, abi: releaseBondAbi, functionName: "commitFinding", args: [BigInt(d.room.id), f.commitment], account: acct, chain: w.chain }),
+      sendTx("Commit finding", (w) =>
+        w.writeContract({ address: config.contractAddress as Address, abi: releaseBondAbi, functionName: "commitFinding", args: [BigInt(d.room.id), f.commitment], chain: w.chain }),
       ),
     );
   const reveal = () =>
     act(() =>
-      sendTx("Reveal finding", (w, acct) =>
+      sendTx("Reveal finding", (w) =>
         w.writeContract({
           address: config.contractAddress as Address,
           abi: releaseBondAbi,
           functionName: "revealFinding",
           args: [BigInt(d.room.id), f.commitmentIndex!, f.findingHash, f.nonce!],
-          account: acct,
           chain: w.chain,
         }),
       ),

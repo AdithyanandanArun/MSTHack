@@ -78,13 +78,12 @@ export function FindingEditor({ roomId, artifactHash, packageLabel }: { roomId: 
         json: { ...content, attachmentIds: files.map((f) => f.id), nonce, findingHash: fh, commitment },
       });
       setStep(null);
-      await sendTx("Commit finding", (w, acct) =>
+      await sendTx("Commit finding", (w) =>
         w.writeContract({
           address: config.contractAddress as Address,
           abi: releaseBondAbi,
           functionName: "commitFinding",
           args: [BigInt(roomId), commitment],
-          account: acct,
           chain: w.chain,
         }),
       );

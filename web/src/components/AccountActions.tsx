@@ -15,8 +15,8 @@ export function WithdrawBox({ pendingWei }: { pendingWei: string }) {
   const withdraw = async () => {
     setError(null);
     try {
-      await sendTx("Withdraw", (w, acct) =>
-        w.writeContract({ address: config.contractAddress as Address, abi: releaseBondAbi, functionName: "withdraw", args: [], account: acct, chain: w.chain }),
+      await sendTx("Withdraw", (w) =>
+        w.writeContract({ address: config.contractAddress as Address, abi: releaseBondAbi, functionName: "withdraw", args: [], chain: w.chain }),
       );
       router.refresh();
     } catch (e) {
