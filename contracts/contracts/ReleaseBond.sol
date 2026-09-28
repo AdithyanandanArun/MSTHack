@@ -3,6 +3,8 @@ pragma solidity ^0.8.24;
 
 import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /// @title ReleaseBond
 /// @notice Release-level security bounties on MST.
@@ -18,9 +20,13 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 /// capped, and any remainder returns to the developer. All payouts are
 /// credited and then withdrawn (pull payments).
 ///
+/// High-value rooms can name a moderator panel: settlement then also needs
+/// EIP-712 signatures from a quorum of panel members over the exact awards,
+/// so the room moderator cannot change amounts after the panel approved them.
+///
 /// The contract never decides whether code is malicious. It only enforces
 /// escrow, timing, commitments and the settlement rules.
-contract ReleaseBond is Ownable2Step, ReentrancyGuard {
+contract ReleaseBond is Ownable2Step, ReentrancyGuard, EIP712 {
     // ---------------------------------------------------------------------
     // Constants
     // ---------------------------------------------------------------------
@@ -34,6 +40,10 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
     uint64 public constant MAX_DISCLOSURE_DURATION = 90 days;
     uint64 public constant MIN_ADJUDICATION_WINDOW = 1 days;
     uint64 public constant MAX_ADJUDICATION_WINDOW = 180 days;
+
+    uint256 public constant MAX_PANEL = 5;
+    bytes32 public constant SETTLEMENT_TYPEHASH =
+        keccak256("Settlement(uint256 roomId,bytes32 adjudicationHash,bytes32 awardsHash)");
 
     uint8 public constant SEVERITY_NONE = 0;
     uint8 public constant SEVERITY_CRITICAL = 4;
@@ -97,6 +107,10 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
         uint64 huntDuration;
         uint64 disclosureDuration;
         uint64 adjudicationWindow;
+        /// Optional co-moderators whose signatures settlement requires.
+        address[] panel;
+        /// How many distinct panel signatures settlement needs (0 when no panel).
+        uint8 panelQuorum;
     }
 
     struct DiscoveryAward {
@@ -136,6 +150,8 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
     mapping(address => bool) public isModerator;
     mapping(address => uint256) public pendingWithdrawals;
     mapping(address => ResearcherStats) private _stats;
+    mapping(uint256 roomId => address[]) private _panels;
+    mapping(uint256 roomId => uint8) public panelQuorum;
 
     // ---------------------------------------------------------------------
     // Events
@@ -155,6 +171,7 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
         uint64 disclosureEndsAt,
         uint64 adjudicationDeadline
     );
+    event PanelConfigured(uint256 indexed roomId, address[] panel, uint8 quorum);
     event BountyIncreased(uint256 indexed roomId, uint256 amount, uint256 newBounty);
     event FindingCommitted(
         uint256 indexed roomId, uint32 indexed index, address indexed researcher, bytes32 commitment
@@ -196,8 +213,9 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
     error InvalidAward(string reason);
     error NothingToWithdraw();
     error TransferFailed();
+    error PanelApproval(string reason);
 
-    constructor(address initialOwner) Ownable(initialOwner) {
+    constructor(address initialOwner) Ownable(initialOwner) EIP712("ReleaseBond", "1") {
         isModerator[initialOwner] = true;
         emit ModeratorUpdated(initialOwner, true);
     }
@@ -235,6 +253,7 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
         }
         if (!isModerator[p.moderator]) revert NotModerator();
         if (p.moderator == msg.sender) revert ConflictOfInterest();
+        _validatePanel(p);
 
         uint256 existing = activeRoomForArtifact[p.artifactHash][msg.sender];
         if (existing != 0) revert ArtifactHasActiveRoom(existing);
@@ -260,6 +279,11 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
         r.version = p.version;
 
         activeRoomForArtifact[p.artifactHash][msg.sender] = roomId;
+        if (p.panel.length > 0) {
+            _panels[roomId] = p.panel;
+            panelQuorum[roomId] = p.panelQuorum;
+            emit PanelConfigured(roomId, p.panel, p.panelQuorum);
+        }
 
         emit RoomCreated(
             roomId,
@@ -354,13 +378,15 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
         DiscoveryAward[] calldata discoveries,
         ReviewAward[] calldata reviews,
         uint32[] calldata rejected,
-        bytes32 adjudicationHash
+        bytes32 adjudicationHash,
+        bytes[] calldata panelSignatures
     ) external nonReentrant {
         Room storage r = _room(roomId);
         if (msg.sender != r.moderator) revert NotModerator();
         Phase ph = phaseOf(roomId);
         if (ph != Phase.Review) revert WrongPhase(ph);
         if (adjudicationHash == bytes32(0)) revert InvalidParams("adjudication hash");
+        _checkPanel(roomId, adjudicationHash, hashAwards(discoveries, reviews, rejected), panelSignatures);
 
         (uint256 discoveryTotal, uint256 reviewTotal) = _validateAwards(roomId, r, discoveries, reviews, rejected);
 
@@ -454,6 +480,68 @@ contract ReleaseBond is Ownable2Step, ReentrancyGuard {
             _stats[researcher].rejectedFindings += 1;
             emit FindingRejected(roomId, rejected[i], researcher);
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // Moderator panels
+    // ---------------------------------------------------------------------
+
+    function _validatePanel(CreateRoomParams calldata p) private view {
+        uint256 n = p.panel.length;
+        if (n > MAX_PANEL) revert InvalidParams("panel too large");
+        if (n == 0) {
+            if (p.panelQuorum != 0) revert InvalidParams("quorum without panel");
+            return;
+        }
+        if (p.panelQuorum == 0 || p.panelQuorum > n) revert InvalidParams("panel quorum");
+        for (uint256 i = 0; i < n; i++) {
+            address m = p.panel[i];
+            if (!isModerator[m]) revert NotModerator();
+            if (m == msg.sender || m == p.moderator) revert ConflictOfInterest();
+            for (uint256 j = 0; j < i; j++) {
+                if (p.panel[j] == m) revert InvalidParams("duplicate panelist");
+            }
+        }
+    }
+
+    /// keccak256 of the exact award arrays; panelists sign this (via EIP-712).
+    function hashAwards(
+        DiscoveryAward[] calldata discoveries,
+        ReviewAward[] calldata reviews,
+        uint32[] calldata rejected
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encode(discoveries, reviews, rejected));
+    }
+
+    /// EIP-712 digest a panelist signs to approve a settlement.
+    function settlementDigest(uint256 roomId, bytes32 adjudicationHash, bytes32 awardsHash) public view returns (bytes32) {
+        return _hashTypedDataV4(keccak256(abi.encode(SETTLEMENT_TYPEHASH, roomId, adjudicationHash, awardsHash)));
+    }
+
+    function _checkPanel(uint256 roomId, bytes32 adjudicationHash, bytes32 awardsHash, bytes[] calldata sigs) private view {
+        uint8 quorum = panelQuorum[roomId];
+        if (quorum == 0) return;
+        address[] storage panel = _panels[roomId];
+        bytes32 digest = settlementDigest(roomId, adjudicationHash, awardsHash);
+        address[] memory seen = new address[](sigs.length);
+        uint256 valid;
+        for (uint256 i = 0; i < sigs.length; i++) {
+            address signer = ECDSA.recover(digest, sigs[i]);
+            bool member;
+            for (uint256 j = 0; j < panel.length; j++) {
+                if (panel[j] == signer) member = true;
+            }
+            if (!member) revert PanelApproval("signer not on panel");
+            for (uint256 k = 0; k < valid; k++) {
+                if (seen[k] == signer) revert PanelApproval("duplicate signer");
+            }
+            seen[valid++] = signer;
+        }
+        if (valid < quorum) revert PanelApproval("quorum not met");
+    }
+
+    function getPanel(uint256 roomId) external view returns (address[] memory panel, uint8 quorum) {
+        return (_panels[roomId], panelQuorum[roomId]);
     }
 
     // ---------------------------------------------------------------------

@@ -21,6 +21,8 @@ function roomParams(overrides = {}) {
     huntDuration: 7 * DAY,
     disclosureDuration: 2 * DAY,
     adjudicationWindow: 14 * DAY,
+    panel: [],
+    panelQuorum: 0,
     ...overrides,
   };
 }
@@ -268,7 +270,7 @@ describe("ReleaseBond", function () {
       ];
       const reviews = [{ reviewer: outsider.address, amount: eth("50") }];
 
-      const tx = rb.connect(moderator).finalizeSettlement(roomId, discoveries, reviews, [2], ADJ);
+      const tx = rb.connect(moderator).finalizeSettlement(roomId, discoveries, reviews, [2], ADJ, []);
       await expect(tx).to.emit(rb, "RoomSettled").withArgs(roomId, ADJ, eth("450"), eth("50"));
       await expect(tx).to.emit(rb, "DiscoveryAwarded").withArgs(roomId, 0, alice.address, 3, false, eth("300"));
       await expect(tx).to.emit(rb, "ReviewAwarded").withArgs(roomId, outsider.address, eth("50"));
@@ -298,7 +300,7 @@ describe("ReleaseBond", function () {
     it("keeps settlement with the room's moderator and inside the review phase", async function () {
       const { rb, owner, alice, roomId } = await loadFixture(roomFixture);
       await commit(rb, alice, roomId, "finding-a");
-      await expect(rb.connect(owner).finalizeSettlement(roomId, [], [], [], ADJ)).to.be.revertedWithCustomError(
+      await expect(rb.connect(owner).finalizeSettlement(roomId, [], [], [], ADJ, [])).to.be.revertedWithCustomError(
         rb,
         "NotModerator",
       );
@@ -308,7 +310,7 @@ describe("ReleaseBond", function () {
       const { rb, moderator, alice, roomId } = await loadFixture(roomFixture);
       await commit(rb, alice, roomId, "finding-a");
       await time.increase(7 * DAY);
-      await expect(rb.connect(moderator).finalizeSettlement(roomId, [], [], [], ADJ)).to.be.revertedWithCustomError(
+      await expect(rb.connect(moderator).finalizeSettlement(roomId, [], [], [], ADJ, [])).to.be.revertedWithCustomError(
         rb,
         "WrongPhase",
       );
@@ -316,7 +318,7 @@ describe("ReleaseBond", function () {
 
     it("enforces award rules: revealed only, valid severity, unique indices, caps, bounty limit", async function () {
       const { rb, developer, moderator, alice, outsider, roomId } = await loadFixture(reviewReady);
-      const s = (d, r = [], rej = []) => rb.connect(moderator).finalizeSettlement(roomId, d, r, rej, ADJ);
+      const s = (d, r = [], rej = []) => rb.connect(moderator).finalizeSettlement(roomId, d, r, rej, ADJ, []);
       const award = (i, amount, severity = 3) => ({ commitmentIndex: i, severity, duplicate: false, amount });
 
       await expect(s([award(9, 1)])).to.be.revertedWithCustomError(rb, "InvalidAward").withArgs("index");
@@ -345,7 +347,7 @@ describe("ReleaseBond", function () {
       await expect(s([], [{ reviewer: moderator.address, amount: 1 }]))
         .to.be.revertedWithCustomError(rb, "InvalidAward")
         .withArgs("reviewer");
-      await expect(rb.connect(moderator).finalizeSettlement(roomId, [award(0, 1)], [], [], ethers.ZeroHash))
+      await expect(rb.connect(moderator).finalizeSettlement(roomId, [award(0, 1)], [], [], ethers.ZeroHash, []))
         .to.be.revertedWithCustomError(rb, "InvalidParams");
       // alice is still unpaid after all those reverts
       expect(await rb.pendingWithdrawals(alice.address)).to.equal(0n);
@@ -361,7 +363,7 @@ describe("ReleaseBond", function () {
           [{ commitmentIndex: 0, severity: 4, duplicate: false, amount: 1 }],
           [],
           [],
-          ADJ,
+          ADJ, []
         ),
       )
         .to.be.revertedWithCustomError(rb, "InvalidAward")
@@ -372,15 +374,15 @@ describe("ReleaseBond", function () {
       const { rb, developer, moderator, outsider, roomId } = await loadFixture(reviewReady);
       await rb
         .connect(moderator)
-        .finalizeSettlement(roomId, [], [{ reviewer: outsider.address, amount: eth("150") }], [0, 1, 2], ADJ);
+        .finalizeSettlement(roomId, [], [{ reviewer: outsider.address, amount: eth("150") }], [0, 1, 2], ADJ, []);
       expect(await rb.pendingWithdrawals(outsider.address)).to.equal(eth("150"));
       expect(await rb.pendingWithdrawals(developer.address)).to.equal(eth("350"));
     });
 
     it("cannot settle twice", async function () {
       const { rb, moderator, roomId } = await loadFixture(reviewReady);
-      await rb.connect(moderator).finalizeSettlement(roomId, [], [], [], ADJ);
-      await expect(rb.connect(moderator).finalizeSettlement(roomId, [], [], [], ADJ)).to.be.revertedWithCustomError(
+      await rb.connect(moderator).finalizeSettlement(roomId, [], [], [], ADJ, []);
+      await expect(rb.connect(moderator).finalizeSettlement(roomId, [], [], [], ADJ, [])).to.be.revertedWithCustomError(
         rb,
         "WrongPhase",
       );
@@ -418,6 +420,109 @@ describe("ReleaseBond", function () {
       expect(await rb.phaseOf(roomId)).to.equal(Phase.Expired);
       await rb.connect(outsider).refundExpired(roomId);
       expect(await rb.pendingWithdrawals(developer.address)).to.equal(eth("500"));
+    });
+  });
+
+  describe("moderator panels", function () {
+    const TYPES = {
+      Settlement: [
+        { name: "roomId", type: "uint256" },
+        { name: "adjudicationHash", type: "bytes32" },
+        { name: "awardsHash", type: "bytes32" },
+      ],
+    };
+    const ADJ = ethers.id("panel-adjudication");
+
+    async function panelRoom() {
+      const ctx = await deployFixture();
+      const signers = await ethers.getSigners();
+      const [p1, p2] = [signers[7], signers[8]];
+      await ctx.rb.setModerator(p1.address, true);
+      await ctx.rb.setModerator(p2.address, true);
+      const params = roomParams({ moderator: ctx.moderator.address, panel: [p1.address, p2.address], panelQuorum: 2 });
+      await expect(ctx.rb.connect(ctx.developer).createRoom(params, { value: eth("100") }))
+        .to.emit(ctx.rb, "PanelConfigured")
+        .withArgs(1n, [p1.address, p2.address], 2);
+      const a = await commit(ctx.rb, ctx.alice, 1n, "panel-finding");
+      await time.increase(7 * DAY);
+      await ctx.rb.connect(ctx.alice).revealFinding(1n, 0, a.findingHash, a.nonce);
+      await toReview(ctx.rb, 1n);
+      const domain = {
+        name: "ReleaseBond",
+        version: "1",
+        chainId: (await ethers.provider.getNetwork()).chainId,
+        verifyingContract: await ctx.rb.getAddress(),
+      };
+      return { ...ctx, p1, p2, domain, roomId: 1n };
+    }
+
+    const award = (amount) => [{ commitmentIndex: 0, severity: 3, duplicate: false, amount }];
+    async function sign(ctx, signer, discoveries) {
+      const awardsHash = await ctx.rb.hashAwards(discoveries, [], []);
+      return signer.signTypedData(ctx.domain, TYPES, { roomId: ctx.roomId, adjudicationHash: ADJ, awardsHash });
+    }
+
+    it("panel quorum enforced: settles only with enough distinct panel signatures over the exact awards", async function () {
+      const ctx = await loadFixture(panelRoom);
+      const { rb, moderator, alice, outsider, p1, p2, roomId } = ctx;
+      const d = award(eth("40"));
+      const settle = (sigs, discoveries = d) => rb.connect(moderator).finalizeSettlement(roomId, discoveries, [], [], ADJ, sigs);
+      const s1 = await sign(ctx, p1, d);
+      const s2 = await sign(ctx, p2, d);
+
+      await expect(settle([])).to.be.revertedWithCustomError(rb, "PanelApproval").withArgs("quorum not met");
+      await expect(settle([s1])).to.be.revertedWithCustomError(rb, "PanelApproval").withArgs("quorum not met");
+      await expect(settle([s1, s1])).to.be.revertedWithCustomError(rb, "PanelApproval").withArgs("duplicate signer");
+      await expect(settle([s1, await sign(ctx, outsider, d)]))
+        .to.be.revertedWithCustomError(rb, "PanelApproval")
+        .withArgs("signer not on panel");
+      // The moderator cannot change the amounts the panel approved.
+      await expect(settle([s1, s2], award(eth("90")))).to.be.revertedWithCustomError(rb, "PanelApproval").withArgs("signer not on panel");
+
+      await expect(settle([s2, s1])).to.emit(rb, "RoomSettled");
+      expect(await rb.pendingWithdrawals(alice.address)).to.equal(eth("40"));
+    });
+
+    it("matches the EIP-712 digest wallets sign", async function () {
+      const ctx = await loadFixture(panelRoom);
+      const awardsHash = await ctx.rb.hashAwards(award(1n), [], []);
+      const expected = ethers.TypedDataEncoder.hash(ctx.domain, TYPES, { roomId: ctx.roomId, adjudicationHash: ADJ, awardsHash });
+      expect(await ctx.rb.settlementDigest(ctx.roomId, ADJ, awardsHash)).to.equal(expected);
+      const [panel, quorum] = await ctx.rb.getPanel(ctx.roomId);
+      expect(panel).to.deep.equal([ctx.p1.address, ctx.p2.address]);
+      expect(quorum).to.equal(2);
+    });
+
+    it("validates panel composition when the room is created", async function () {
+      const { rb, owner, developer, moderator, outsider } = await loadFixture(deployFixture);
+      const signers = await ethers.getSigners();
+      const [p1, p2] = [signers[7], signers[8]];
+      await rb.setModerator(p1.address, true);
+      await rb.setModerator(p2.address, true);
+      const c = (overrides) => rb.connect(developer).createRoom(roomParams({ moderator: moderator.address, ...overrides }), { value: 1 });
+      await expect(c({ panel: [outsider.address], panelQuorum: 1 })).to.be.revertedWithCustomError(rb, "NotModerator");
+      await expect(c({ panel: [moderator.address], panelQuorum: 1 })).to.be.revertedWithCustomError(rb, "ConflictOfInterest");
+      await rb.setModerator(developer.address, true);
+      await expect(c({ panel: [developer.address], panelQuorum: 1 })).to.be.revertedWithCustomError(rb, "ConflictOfInterest");
+      await expect(c({ panel: [p1.address, p1.address], panelQuorum: 1 }))
+        .to.be.revertedWithCustomError(rb, "InvalidParams")
+        .withArgs("duplicate panelist");
+      await expect(c({ panel: [p1.address], panelQuorum: 0 })).to.be.revertedWithCustomError(rb, "InvalidParams").withArgs("panel quorum");
+      await expect(c({ panel: [p1.address], panelQuorum: 2 })).to.be.revertedWithCustomError(rb, "InvalidParams").withArgs("panel quorum");
+      await expect(c({ panel: [], panelQuorum: 1 })).to.be.revertedWithCustomError(rb, "InvalidParams").withArgs("quorum without panel");
+      const six = Array.from({ length: 6 }, () => p1.address);
+      await expect(c({ panel: six, panelQuorum: 1 })).to.be.revertedWithCustomError(rb, "InvalidParams").withArgs("panel too large");
+      await expect(c({ panel: [p1.address, p2.address, owner.address], panelQuorum: 2 })).to.emit(rb, "PanelConfigured");
+    });
+
+    it("keeps rooms without a panel settling with no signatures", async function () {
+      const { rb, moderator, alice, roomId } = await loadFixture(roomFixture);
+      const a = await commit(rb, alice, roomId, "no-panel");
+      await time.increase(7 * DAY);
+      await rb.connect(alice).revealFinding(roomId, 0, a.findingHash, a.nonce);
+      await toReview(rb, roomId);
+      expect((await rb.getPanel(roomId))[1]).to.equal(0);
+      await expect(rb.connect(moderator).finalizeSettlement(roomId, award(1n), [], [], ADJ, [])).to.emit(rb, "RoomSettled");
     });
   });
 

@@ -24,6 +24,9 @@ const required = [
   "refuses discovery awards for unrevealed commitments",
   "returns the pool only after the adjudication deadline",
   "forbids a developer from moderating their own release",
+  "panel quorum enforced",
+  "matches the EIP-712 digest wallets sign",
+  "validates panel composition when the room is created",
 ];
 for (const r of required) if (!out.includes(r)) fail(`missing test: ${r}`);
 console.log(`CONTRACT SUITE VERIFIED (${passing} passing)`);
