@@ -2,8 +2,9 @@ import "server-only";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { cookies, headers } from "next/headers";
-import { getAddress, verifyMessage, type Address, type Hex } from "viem";
+import { getAddress, verifyMessage, verifyTypedData, type Address, type Hex } from "viem";
 import { parseSiweMessage } from "viem/siwe";
+import { signInTypedData, type SignInScheme } from "@/lib/signIn";
 import { appConfig } from "./config";
 import { dataPath, db, nowSec } from "./db";
 
@@ -40,8 +41,11 @@ export class AuthError extends Error {
   status = 401;
 }
 
-/** Verifies an EIP-4361 message + signature and returns the signer. */
-export async function verifySiwe(message: string, signature: Hex): Promise<Address> {
+/**
+ * Verifies an EIP-4361 message + signature and returns the signer. The message is signed either
+ * with personal_sign (eip191) or wrapped in EIP-712 typed data for wallets without personal_sign.
+ */
+export async function verifySiwe(message: string, signature: Hex, scheme: SignInScheme = "eip191"): Promise<Address> {
   const parsed = parseSiweMessage(message);
   if (!parsed.address || !parsed.nonce || !parsed.domain) throw new AuthError("malformed sign-in message");
 
@@ -59,7 +63,10 @@ export async function verifySiwe(message: string, signature: Hex): Promise<Addre
     | undefined;
   if (!row || row.used || row.created_at < nowSec() - NONCE_TTL) throw new AuthError("unknown or expired nonce");
 
-  const ok = await verifyMessage({ address: parsed.address, message, signature });
+  const ok =
+    scheme === "eip712"
+      ? await verifyTypedData({ address: parsed.address, signature, ...signInTypedData(parsed.chainId, message) })
+      : await verifyMessage({ address: parsed.address, message, signature });
   if (!ok) throw new AuthError("signature does not match address");
   d.prepare("UPDATE auth_nonces SET used = 1 WHERE nonce = ?").run(parsed.nonce);
   return getAddress(parsed.address);

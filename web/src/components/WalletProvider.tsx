@@ -21,6 +21,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { createSiweMessage } from "viem/siwe";
 import { chainByKey, type ChainKey } from "@/lib/chain/chains";
 import { api, errorMessage } from "@/lib/client/api";
+import { isUnsupportedMethodError, signInTypedData, type SignInScheme } from "@/lib/signIn";
 
 export interface ClientConfig {
   chainKey: ChainKey;
@@ -253,13 +254,24 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
         nonce,
         issuedAt: new Date(),
       });
-      const signature = await walletClient().signMessage({ message });
-      await api("/api/auth/verify", { method: "POST", json: { message, signature } });
+      const wallet = walletClient();
+      let scheme: SignInScheme = "eip191";
+      let signature: `0x${string}`;
+      try {
+        signature = await wallet.signMessage({ message });
+      } catch (e) {
+        // Some wallets (e.g. Bridgekey) reject personal_sign; sign the same message as EIP-712 instead.
+        if (!isUnsupportedMethodError(e)) throw e;
+        scheme = "eip712";
+        await ensureChain(); // wallets refuse typed data whose domain chainId is not the active chain
+        signature = await wallet.signTypedData(signInTypedData(config.chainId, message));
+      }
+      await api("/api/auth/verify", { method: "POST", json: { message, signature, scheme } });
       await refreshSession();
     } finally {
       setBusy(null);
     }
-  }, [account, config.chainId, walletClient, refreshSession]);
+  }, [account, config.chainId, walletClient, ensureChain, refreshSession]);
 
   const sendTx = useCallback<WalletState["sendTx"]>(
     async (label, send) => {

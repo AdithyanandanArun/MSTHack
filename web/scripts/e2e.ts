@@ -21,6 +21,7 @@ import {
 } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { createSiweMessage } from "viem/siwe";
+import { signInTypedData } from "../src/lib/signIn";
 import { adjudicationHash, computeCommitment, findingHash, randomNonce, type FindingContent } from "../src/lib/canonical";
 import { localHardhat } from "../src/lib/chain/chains";
 import { releaseBondAbi, releaseBondBytecode } from "../src/lib/chain/releaseBondArtifact";
@@ -84,9 +85,9 @@ class Actor {
     if (r.status >= 400) throw new Error(`${this.name} ${method} ${p} -> ${r.status} ${JSON.stringify(r.data)}`);
     return r.data;
   }
-  async signIn() {
+  async signInMessage() {
     const { nonce } = await this.ok<{ nonce: string }>("POST", "/api/auth/nonce");
-    const message = createSiweMessage({
+    return createSiweMessage({
       domain: new URL(BASE).host,
       address: this.account.address,
       statement: "Sign in to ReleaseBond.",
@@ -96,8 +97,15 @@ class Actor {
       nonce,
       issuedAt: new Date(),
     });
-    const signature = await this.account.signMessage({ message });
-    await this.ok("POST", "/api/auth/verify", { message, signature });
+  }
+  /** eip712 is the fallback for wallets without personal_sign (e.g. Bridgekey). */
+  async signIn(scheme: "eip191" | "eip712" = "eip191") {
+    const message = await this.signInMessage();
+    const signature =
+      scheme === "eip712"
+        ? await this.account.signTypedData(signInTypedData(chain.id, message))
+        : await this.account.signMessage({ message });
+    await this.ok("POST", "/api/auth/verify", { message, signature, scheme });
   }
   async tx(fn: string, args: unknown[], value?: bigint): Promise<Hex> {
     const hash = await this.wallet.writeContract({
@@ -171,7 +179,15 @@ async function main() {
       new Actor(["owner/moderator", "developer", "alice", "bob", "carol", "dave", "erin (appeals moderator)", "frank (panel moderator)"][i], privateKeyToAccount(k)),
   );
   console.log("• sign in all wallets with SIWE");
-  for (const a of [owner, dev, alice, bob, carol, dave, erin, frank]) await a.signIn();
+  for (const a of [owner, dev, alice, carol, dave, erin, frank]) await a.signIn();
+  {
+    // A personal_sign signature must not pass as the EIP-712 scheme (and vice versa).
+    const message = await bob.signInMessage();
+    const r = await bob.req("POST", "/api/auth/verify", { message, signature: await bob.account.signMessage({ message }), scheme: "eip712" });
+    assert(r.status === 401, "sign-in rejects a personal_sign signature presented as EIP-712");
+  }
+  await bob.signIn("eip712");
+  assert((await bob.ok<{ address: string | null }>("GET", "/api/auth/me")).address === bob.account.address.toLowerCase(), "EIP-712 sign-in (wallets without personal_sign) starts a session");
   const me = await alice.ok<{ address: string }>("GET", "/api/auth/me");
   assert(me.address === alice.address, "session cookie identifies the signed-in wallet");
   const forged = await new Actor("anon", alice.account).req("GET", "/api/auth/me");
