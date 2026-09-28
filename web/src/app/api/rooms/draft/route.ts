@@ -5,6 +5,7 @@ import { contractInfo } from "@/lib/server/config";
 import { db, nowSec } from "@/lib/server/db";
 import { getArtifact } from "@/lib/server/evidence";
 import { HttpError, isModerator } from "@/lib/server/queries";
+import { enforceLimit } from "@/lib/server/rateLimit";
 
 const Body = z.object({
   artifactSha256: z.string().regex(/^[0-9a-f]{64}$/),
@@ -19,6 +20,7 @@ const Body = z.object({
  */
 export const POST = route(async (req) => {
   const developer = await requireSession();
+  enforceLimit("roomDraft", req, developer);
   const body = Body.parse(await req.json());
   const { address } = contractInfo();
   if (!address) throw new HttpError(503, "ReleaseBond contract is not configured yet (see /admin)");

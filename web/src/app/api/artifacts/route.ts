@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/server/auth";
 import { getArtifact, ingestRegistryRelease, ingestUpload } from "@/lib/server/evidence";
 import { HttpError } from "@/lib/server/queries";
 import { MAX_ARTIFACT_BYTES } from "@/lib/evidence/archive";
+import { enforceLimit } from "@/lib/server/rateLimit";
 
 export const maxDuration = 300;
 
@@ -36,7 +37,7 @@ function artifactResponse(sha: string) {
  * multipart body (file, optional previous, ecosystem) -> uploaded artifact.
  */
 export const POST = route(async (req) => {
-  await requireSession();
+  enforceLimit("artifact", req, await requireSession());
   const type = req.headers.get("content-type") ?? "";
   try {
     if (type.includes("multipart/form-data")) {

@@ -3,6 +3,7 @@ import { json, route } from "@/lib/server/api";
 import { chainNow } from "@/lib/server/config";
 import { db, nowSec } from "@/lib/server/db";
 import { canView, currentViewer, HttpError, requireFinding, requireRoom } from "@/lib/server/queries";
+import { enforceLimit } from "@/lib/server/rateLimit";
 
 const Body = z.object({ targetType: z.enum(["finding", "comment"]), targetId: z.number().int().positive() });
 
@@ -10,6 +11,7 @@ const Body = z.object({ targetType: z.enum(["finding", "comment"]), targetId: z.
 export const POST = route(async (req) => {
   const viewer = await currentViewer();
   if (!viewer.address) throw new HttpError(401, "sign in first");
+  enforceLimit("vote", req, viewer.address);
   const { targetType, targetId } = Body.parse(await req.json());
   const findingId =
     targetType === "finding"

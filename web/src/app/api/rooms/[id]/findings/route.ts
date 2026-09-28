@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/server/auth";
 import { chainNow } from "@/lib/server/config";
 import { createFinding, CreateFinding } from "@/lib/server/findings";
 import { currentViewer, findingListItem, requireRoom, roomFindings } from "@/lib/server/queries";
+import { enforceLimit } from "@/lib/server/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export const GET = route(async (_req, ctx: IdParams) => {
 
 export const POST = route(async (req, ctx: IdParams) => {
   const author = await requireSession();
+  enforceLimit("finding", req, author);
   const roomId = await idParam(ctx);
   const input = CreateFinding.parse(await req.json());
   return json(await createFinding(roomId, author, input), 201);
