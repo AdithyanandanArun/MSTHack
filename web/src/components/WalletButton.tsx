@@ -68,6 +68,7 @@ export function WalletButton() {
               )}
               {options.map((o) => (
                 <button key={o.id} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-[var(--bg-subtle)]" onClick={() => run(() => connect(o.id))}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- EIP-6963 icons are data URIs */}
                   {o.icon ? <img src={o.icon} alt="" className="h-5 w-5" /> : <span className="h-5 w-5 rounded bg-[var(--bg-inset)]" />}
                   <span className="truncate">{o.name}</span>
                 </button>

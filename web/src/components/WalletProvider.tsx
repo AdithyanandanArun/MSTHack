@@ -84,7 +84,6 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
     [chain],
   );
   const [injected, setInjected] = useState<WalletOption[]>([]);
-  const [active, setActive] = useState<WalletOption | null>(null);
   const [account, setAccount] = useState<Address | null>(null);
   const [walletChainId, setWalletChainId] = useState<number | null>(null);
   const [session, setSession] = useState<Session>({ address: null, isModerator: false, user: null });
@@ -148,7 +147,6 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
     async (opt: WalletOption, requestAccounts: boolean) => {
       if (opt.kind === "dev") {
         const acct = privateKeyToAccount(opt.privateKey!);
-        setActive(opt);
         activeRef.current = opt;
         setAccount(acct.address);
         setWalletChainId(config.chainId);
@@ -159,7 +157,6 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
       const accounts = (await p.request({ method: requestAccounts ? "eth_requestAccounts" : "eth_accounts" })) as string[];
       if (!accounts.length) return;
       const cid = Number(await p.request({ method: "eth_chainId" }));
-      setActive(opt);
       activeRef.current = opt;
       setAccount(getAddress(accounts[0]));
       setWalletChainId(cid);
@@ -189,7 +186,6 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
   const disconnect = useCallback(async () => {
     await api("/api/auth/logout", { method: "POST" }).catch(() => undefined);
     localStorage.removeItem(LAST_WALLET);
-    setActive(null);
     activeRef.current = null;
     setAccount(null);
     await refreshSession();
