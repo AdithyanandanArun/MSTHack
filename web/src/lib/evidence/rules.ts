@@ -15,8 +15,10 @@ interface LineRule {
   ignore?: (m: RegExpMatchArray, line: string) => boolean;
 }
 
+// Matches both literal paths ("~/.ssh/id_rsa") and path segments built with
+// path.join(os.homedir(), ".ssh", ...), which is how real payloads hide them.
 const SENSITIVE =
-  /(\.ssh\/|id_rsa|id_ed25519|id_ecdsa|authorized_keys|known_hosts|\.aws\/credentials|\.npmrc|\.git-credentials|\.bash_history|\.zsh_history|\/etc\/shadow|\/etc\/passwd|wallet\.dat|\.gnupg|\.docker\/config\.json|\.kube\/config|\.config\/gcloud|Local Storage\/leveldb|keychain|\.netrc|\.pypirc)/;
+  /(\.ssh(?=[\/'"`\\])|id_rsa|id_ed25519|id_ecdsa|authorized_keys|known_hosts|\.aws(?=[\/'"`\\])|\.npmrc|\.git-credentials|\.bash_history|\.zsh_history|\/etc\/shadow|\/etc\/passwd|wallet\.dat|\.gnupg|\.docker(?=[\/'"`\\])|\.kube(?=[\/'"`\\])|\.config\/gcloud|Local Storage\/leveldb|keychain|\.netrc|\.pypirc)/;
 const SECRET_ENV = /process\.env(?:\.|\[\s*['"`])([A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PRIVATE|CREDENTIAL|API_KEY|ACCESS_KEY|AWS_|NPM_|GITHUB_|GH_|SSH_)[A-Z0-9_]*)/i;
 
 export const JS_RULES: LineRule[] = [
