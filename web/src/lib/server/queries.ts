@@ -27,6 +27,7 @@ export interface RoomRow {
   adjudication_json: string | null;
   total_awarded_wei: string | null;
   refunded_wei: string | null;
+  require_verified: number;
 }
 
 export interface FindingRow {

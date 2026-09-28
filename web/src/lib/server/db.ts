@@ -187,6 +187,23 @@ CREATE TABLE IF NOT EXISTS payouts (
   PRIMARY KEY (tx_hash, log_index)
 );
 
+-- One appeal per finding: the author or developer contests the room
+-- moderator's verdict; a different registered moderator decides it.
+CREATE TABLE IF NOT EXISTS appeals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  finding_id INTEGER NOT NULL UNIQUE,
+  appellant TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',    -- open | upheld | overturned
+  reviewer TEXT,
+  decision_reasoning TEXT,
+  new_verdict TEXT,
+  new_severity TEXT,
+  new_duplicate_of INTEGER,
+  created_at INTEGER NOT NULL,
+  decided_at INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS withdrawals (
   account TEXT NOT NULL,
   amount_wei TEXT NOT NULL,
@@ -195,6 +212,17 @@ CREATE TABLE IF NOT EXISTS withdrawals (
   PRIMARY KEY (tx_hash, log_index)
 );
 `;
+
+/** Additive column migrations for databases created by earlier versions. */
+function migrate(conn: Database.Database) {
+  const add = (table: string, column: string, ddl: string) => {
+    const cols = conn.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!cols.some((c) => c.name === column)) conn.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  };
+  // Off-chain room policy: only moderator-verified researchers may submit reports.
+  add("rooms", "require_verified", "INTEGER NOT NULL DEFAULT 0");
+  add("room_drafts", "require_verified", "INTEGER NOT NULL DEFAULT 0");
+}
 
 type GlobalWithDb = typeof globalThis & { __releasebondDb?: Database.Database };
 
@@ -207,6 +235,7 @@ export function db(): Database.Database {
     conn.pragma("foreign_keys = ON");
     conn.pragma("busy_timeout = 5000");
     conn.exec(SCHEMA);
+    migrate(conn);
     g.__releasebondDb = conn;
   }
   return g.__releasebondDb;

@@ -12,6 +12,8 @@ const Body = z.object({
   title: z.string().trim().max(140).optional(),
   description: z.string().max(10_000).optional(),
   moderator: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+  /** Off-chain policy: only moderator-verified researchers may submit reports. */
+  requireVerified: z.boolean().default(false),
 });
 
 /**
@@ -36,10 +38,11 @@ export const POST = route(async (req) => {
 
   db()
     .prepare(
-      `INSERT INTO room_drafts(artifact_sha256, developer, title, description, created_at) VALUES(?, ?, ?, ?, ?)
-       ON CONFLICT(artifact_sha256, developer) DO UPDATE SET title = excluded.title, description = excluded.description`,
+      `INSERT INTO room_drafts(artifact_sha256, developer, title, description, require_verified, created_at) VALUES(?, ?, ?, ?, ?, ?)
+       ON CONFLICT(artifact_sha256, developer) DO UPDATE SET
+         title = excluded.title, description = excluded.description, require_verified = excluded.require_verified`,
     )
-    .run(art.sha256, developer, body.title ?? null, body.description ?? null, nowSec());
+    .run(art.sha256, developer, body.title ?? null, body.description ?? null, body.requireVerified ? 1 : 0, nowSec());
 
   return json({
     contract: address,

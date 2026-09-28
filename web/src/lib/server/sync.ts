@@ -112,13 +112,13 @@ async function applyEvent(ev: Decoded, log: Log): Promise<void> {
       const developer = lower(a.developer);
       const artifactSha = a.artifactHash.slice(2).toLowerCase();
       const draft = d
-        .prepare("SELECT title, description FROM room_drafts WHERE artifact_sha256 = ? AND developer = ?")
-        .get(artifactSha, developer) as { title: string | null; description: string | null } | undefined;
+        .prepare("SELECT title, description, require_verified FROM room_drafts WHERE artifact_sha256 = ? AND developer = ?")
+        .get(artifactSha, developer) as { title: string | null; description: string | null; require_verified: number } | undefined;
       const createdAt = await blockTime(log.blockNumber!);
       d.prepare(
         `INSERT INTO rooms(id, developer, moderator, artifact_hash, ecosystem, package_name, version, bounty_wei,
-           created_at, hunt_ends_at, disclosure_ends_at, adjudication_deadline, status, title, description, create_tx)
-         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+           created_at, hunt_ends_at, disclosure_ends_at, adjudication_deadline, status, title, description, create_tx, require_verified)
+         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
          ON CONFLICT(id) DO NOTHING`,
       ).run(
         Number(a.roomId),
@@ -136,6 +136,7 @@ async function applyEvent(ev: Decoded, log: Log): Promise<void> {
         draft?.title ?? null,
         draft?.description ?? null,
         tx,
+        draft?.require_verified ?? 0,
       );
       break;
     }

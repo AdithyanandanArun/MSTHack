@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Hex } from "viem";
 import { FindingEditor } from "@/components/FindingEditor";
 import { chainNow } from "@/lib/server/config";
-import { getRoom, roomPhase } from "@/lib/server/queries";
+import { currentViewer, getRoom, roomPhase } from "@/lib/server/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +12,8 @@ export default async function NewFindingPage({ params }: { params: Promise<{ id:
   const room = getRoom(Number(id));
   if (!room) notFound();
   const phase = roomPhase(room, await chainNow());
+  const viewer = await currentViewer();
+  const blockedUnverified = !!room.require_verified && !!viewer.user && !viewer.user.verified;
   return (
     <div className="space-y-4">
       <div>
@@ -23,6 +25,10 @@ export default async function NewFindingPage({ params }: { params: Promise<{ id:
       </div>
       {phase !== "hunting" ? (
         <div className="flash flash-warn">The hunt for this release is closed.</div>
+      ) : blockedUnverified ? (
+        <div className="flash flash-warn">
+          This room only accepts reports from verified researchers. Ask a moderator to verify your wallet (they can do it from the admin page).
+        </div>
       ) : (
         <FindingEditor roomId={room.id} artifactHash={room.artifact_hash as Hex} packageLabel={`${room.package_name}@${room.version}`} />
       )}

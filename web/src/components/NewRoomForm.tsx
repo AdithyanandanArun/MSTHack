@@ -51,6 +51,7 @@ export function NewRoomForm() {
   const [adjWindow, setAdjWindow] = useState(ADJ[1].s);
   const moderators = config.moderators.filter((m) => m !== account?.toLowerCase());
   const [moderator, setModerator] = useState("");
+  const [requireVerified, setRequireVerified] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -86,7 +87,7 @@ export function NewRoomForm() {
       if (value <= 0n) throw new Error("bounty must be positive");
       const draft = await api<{ contract: Address; params: { ecosystem: string; packageName: string; version: string; artifactHash: Hex; previousArtifactHash: Hex; moderator: Address } }>(
         "/api/rooms/draft",
-        { method: "POST", json: { artifactSha256: artifact.sha256, title, description, moderator: mod } },
+        { method: "POST", json: { artifactSha256: artifact.sha256, title, description, moderator: mod, requireVerified } },
       );
       const hash = await sendTx("Lock bounty", (wallet, acct) =>
         wallet.writeContract({
@@ -218,6 +219,14 @@ export function NewRoomForm() {
               <select className="input" value={adjWindow} onChange={(e) => setAdjWindow(Number(e.target.value))}>
                 {ADJ.map((h) => <option key={h.s} value={h.s}>{h.label}</option>)}
               </select>
+            </label>
+            <label className="flex items-start gap-2 text-sm sm:col-span-2">
+              <input type="checkbox" className="mt-1" checked={requireVerified} onChange={(e) => setRequireVerified(e.target.checked)} />
+              <span>
+                <b>Verified researchers only.</b> Only wallets a moderator has verified as human researchers may submit reports. This is
+                enforced by ReleaseBond when reports are submitted; the contract itself accepts any commitment, but unverified commitments
+                have no report to review or pay.
+              </span>
             </label>
             <div className="text-xs muted sm:col-span-2">
               The bounty is escrowed by the ReleaseBond contract. Researchers can verify it before they start. After the hunt and

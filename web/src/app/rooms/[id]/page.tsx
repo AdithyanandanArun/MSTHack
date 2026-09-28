@@ -70,6 +70,11 @@ export default async function RoomPage({ params, searchParams }: { params: Promi
             <span className="muted">@{room.version}</span>
           </h1>
           {room.title && <p className="mt-1">{room.title}</p>}
+          {room.require_verified ? (
+            <div className="mt-1">
+              <Label tone="success" title="Only moderator-verified researchers may submit reports">verified researchers only</Label>
+            </div>
+          ) : null}
         </div>
         <div className="text-right">
           <PhaseBadge phase={phase} large />
