@@ -10,6 +10,8 @@
     "test": "npm --prefix contracts test && npm --prefix web test",
     "e2e": "node scripts/check-e2e.mjs",
     "gates": "node scripts/run-gates.mjs",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs",
     "deploy:mst": "npm --prefix contracts run deploy:mst"
   },
   "license": "MIT"
