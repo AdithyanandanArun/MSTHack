@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { decodeEventLog, parseEther, type Address, type Hex } from "viem";
 import { releaseBondAbi } from "@/lib/chain/releaseBondArtifact";
 import { api, errorMessage } from "@/lib/client/api";
@@ -156,8 +156,9 @@ export function NewRoomForm() {
                 <option value="pacman">pacman (Arch Linux)</option>
               </select>
             </label>
+            {/* Keyed so React never reuses the text inputs as file inputs when switching tabs. */}
             {mode === "registry" ? (
-              <>
+              <Fragment key="registry">
                 <label className="sm:col-span-2">
                   <span className="field-label">Package</span>
                   <input className="input" placeholder={ecosystem === "npm" ? "left-pad or @scope/pkg" : "which"} value={name} onChange={(e) => setName(e.target.value)} />
@@ -166,9 +167,9 @@ export function NewRoomForm() {
                   <span className="field-label">Exact version</span>
                   <input className="input" placeholder={ecosystem === "npm" ? "1.3.0" : "2.25-1 (blank = current)"} value={version} onChange={(e) => setVersion(e.target.value)} />
                 </label>
-              </>
+              </Fragment>
             ) : (
-              <>
+              <Fragment key="upload">
                 <label className="sm:col-span-2">
                   <span className="field-label">Artifact ({ecosystem === "npm" ? ".tgz from npm pack" : ".pkg.tar.zst"})</span>
                   <input className="input" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
@@ -177,7 +178,7 @@ export function NewRoomForm() {
                   <span className="field-label">Previous release (optional, for diff)</span>
                   <input className="input" type="file" onChange={(e) => setPrevious(e.target.files?.[0] ?? null)} />
                 </label>
-              </>
+              </Fragment>
             )}
           </div>
           <button className="btn" disabled={!signedIn || loading} onClick={fetchArtifact}>
