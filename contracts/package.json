@@ -1,0 +1,21 @@
+{
+  "name": "releasebond-contracts",
+  "version": "1.0.0",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "export": "hardhat compile && node scripts/export-abi.js",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:mst": "hardhat run scripts/deploy.js --network mstTestnet"
+  },
+  "license": "MIT",
+  "description": "ReleaseBond escrow, commitment and settlement contract for MST",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.2",
+    "@openzeppelin/contracts": "^5.6.1",
+    "dotenv": "^18.0.4",
+    "hardhat": "^2.29.1"
+  },
+  "private": true
+}
