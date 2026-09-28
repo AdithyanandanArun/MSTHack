@@ -120,3 +120,18 @@ ABANDON: G12 depends on G11; not pursued
   CHECK: node scripts/check-e2e.mjs
   EXPECT: /genuine deployment accepted despite immutables[\s\S]*foreign bytecode rejected[\s\S]*E2E LIFECYCLE PASSED/
   EVIDENCE: automatic-evidence=v1; definition-sha256=ac58d7508c1614bc5ce65ad8cdb844b19eb7c8a1921fdb13c31505260a84bb4e; exit=0; EXPECT=matched; output-sha256=1812d4bbce1f3aa2baac9ce15cbf79b1604ce7fc0b46373adda2128470801183; output-bytes=4914; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
+
+- [ ] G23: a package's release security history (page and JSON API for CI) lists every reviewed version with its phase, pool and accepted findings by severity, and never presents a review as a safety guarantee
+  CHECK: node scripts/check-e2e.mjs
+  EXPECT: /package history lists the reviewed release with its accepted findings[\s\S]*package history API is decision support, not a safety verdict[\s\S]*E2E LIFECYCLE PASSED/
+  EVIDENCE: pending
+
+- [ ] G24: a developer's profile shows their review track record (releases reviewed, pools funded, accepted findings by severity) measured from indexed rooms
+  CHECK: node scripts/check-e2e.mjs
+  EXPECT: /developer track record shows funded pools and accepted findings[\s\S]*E2E LIFECYCLE PASSED/
+  EVIDENCE: pending
+
+- [ ] G25: the Blockscout verification payload for ReleaseBond recompiles (offline, with the pinned solc) to exactly the compiled creation and runtime bytecode, and a corrupted payload does not
+  CHECK: node scripts/check-verify-payload.mjs
+  EXPECT: VERIFY PAYLOAD REPRODUCES BYTECODE
+  EVIDENCE: pending

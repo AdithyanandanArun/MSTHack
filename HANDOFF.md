@@ -49,6 +49,11 @@ Run `npm run gates` to re-verify everything. Expected: 8 × PASS. G5/G6 need Doc
 9. The researcher's reveal **nonce is stored server-side** (plus a localStorage backup in the browser), trading some trust for recoverability. The alternative is client-only storage with an export or backup UX.
 10. Explorer links are verified: testnet.mstscan.com is Blockscout, and `/tx/<hash>` and `/address/<addr>` resolve (`scripts/check-explorer.mjs`). Blockscout also has a contract-verification API; publishing the ReleaseBond source there after G9 is a nice next step.
 
+## Recently added (spec §25, §27, §43)
+
+- **Release security history:** `/packages/<ecosystem>/<name>` plus `GET /api/packages/<ecosystem>/<name>` (JSON for CI/CD; scoped npm names work, e.g. `/api/packages/npm/@scope/pkg`). Each funded release shows its phase, pool and accepted findings by severity, plus a product-language summary (§45) and a disclaimer. It never says "safe".
+- **Developer track record:** on `/researchers/<address>` and `GET /api/developers/<address>`: releases funded and reviewed, pools funded, accepted findings by severity, and how many releases with findings were followed by a newer reviewed release (a patch signal, not proof of a fix).
+
 ## Traps already found (don't repeat them)
 
 - **viem caches `getBlockNumber` for ~4 s.** The indexer read a stale head and silently skipped new blocks. The server client now uses `cacheTime: 0` (`web/src/lib/server/config.ts`). `syncChain({force:true})` also waits for any in-flight pass, and `syncAfterTx` loops until the receipt's block is indexed.
