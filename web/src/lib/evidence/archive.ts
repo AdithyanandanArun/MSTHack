@@ -108,12 +108,45 @@ export async function readTarball(
   return files;
 }
 
-export async function fetchBuffer(url: string, maxBytes = MAX_ARTIFACT_BYTES): Promise<Buffer> {
-  const res = await fetch(url, { redirect: "follow", headers: { "user-agent": "ReleaseBond/0.1 (+evidence-engine)" } });
-  if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
+async function fetchOnce(url: string, maxBytes: number): Promise<Buffer> {
+  const res = await fetch(url, {
+    redirect: "follow",
+    headers: { "user-agent": "ReleaseBond/0.1 (+evidence-engine)" },
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!res.ok) throw Object.assign(new Error(`GET ${url} -> ${res.status}`), { status: res.status });
   const len = Number(res.headers.get("content-length") || 0);
-  if (len > maxBytes) throw new Error(`artifact too large (${len} bytes)`);
+  if (len > maxBytes) throw Object.assign(new Error(`artifact too large (${len} bytes)`), { status: 413 });
   const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length > maxBytes) throw new Error(`artifact too large (${buf.length} bytes)`);
+  if (buf.length > maxBytes) throw Object.assign(new Error(`artifact too large (${buf.length} bytes)`), { status: 413 });
   return buf;
+}
+
+/** GET with bounded size and retries on network errors / 5xx (registries and mirrors do flake). */
+export async function fetchBuffer(url: string, maxBytes = MAX_ARTIFACT_BYTES, attempts = 3): Promise<Buffer> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fetchOnce(url, maxBytes);
+    } catch (e) {
+      last = e;
+      const status = (e as { status?: number }).status;
+      if (status !== undefined && status < 500) throw e; // 4xx and size errors are final
+      await new Promise((r) => setTimeout(r, 500 * 2 ** i));
+    }
+  }
+  throw last;
+}
+
+/** Tries each URL in order; used for mirror fallback. */
+export async function fetchFirst(urls: string[], maxBytes = MAX_ARTIFACT_BYTES): Promise<{ url: string; buffer: Buffer }> {
+  let last: unknown;
+  for (const url of urls) {
+    try {
+      return { url, buffer: await fetchBuffer(url, maxBytes) };
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last;
 }

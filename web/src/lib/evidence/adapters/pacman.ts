@@ -1,7 +1,7 @@
 import zlib from "node:zlib";
 import tar from "tar-stream";
 import { Readable } from "node:stream";
-import { decompress, fetchBuffer, readTarball, sha256Hex } from "../archive";
+import { decompress, fetchBuffer, fetchFirst, readTarball, sha256Hex } from "../archive";
 import type { ArtifactFile, ReleaseArtifact } from "../types";
 
 const ARCHIVE = process.env.ARCH_ARCHIVE_URL || "https://archive.archlinux.org/packages";
@@ -181,17 +181,19 @@ export async function fetchPacmanRelease(
   const target = version ?? (current ? fullVersion(current) : archived.map((a) => a.version).sort(vercmp).pop());
   if (!target) throw new Error(`pacman package ${name} not found`);
 
-  let url: string;
+  const candidates: string[] = [];
   let integrity: { value: string; verified: boolean } | null = null;
   const isCurrent = current && fullVersion(current) === target;
   if (isCurrent) {
-    url = `${MIRROR}/${current.repo}/os/${ARCH}/${current.filename}`;
+    candidates.push(`${MIRROR}/${current.repo}/os/${ARCH}/${current.filename}`);
+    // The archive also carries the current build; it is the fallback when the mirror flakes.
+    candidates.push(`${ARCHIVE}/${name[0]}/${name}/${current.filename}`);
   } else {
     const hit = archived.find((a) => a.version === target);
     if (!hit) throw new Error(`${name} ${target} not found in the Arch archive`);
-    url = `${ARCHIVE}/${name[0]}/${name}/${hit.file}`;
+    candidates.push(`${ARCHIVE}/${name[0]}/${name}/${hit.file}`);
   }
-  const buffer = await fetchBuffer(url);
+  const { url, buffer } = await fetchFirst(candidates);
   if (isCurrent) {
     try {
       const sums = await repoChecksums(current.repo);
