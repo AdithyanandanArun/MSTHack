@@ -207,35 +207,3 @@ export async function buildReport(opts: {
 export function reportHash(report: EvidenceReport): string {
   return sha256Hex(Buffer.from(canonicalJson(report)));
 }
-
-/** Runs the pipeline for a finding and stores the run. */
-export async function runEvidence(opts: {
-  roomId: number;
-  sha256: string;
-  findingId: number | null;
-  requestedBy: string;
-  claims: Observation[];
-  finding?: Parameters<typeof buildReport>[0]["finding"];
-}): Promise<{ id: number; report: EvidenceReport | null; error?: string }> {
-  const d = db();
-  const id = Number(
-    d
-      .prepare("INSERT INTO evidence_runs(room_id, finding_id, requested_by, status, created_at) VALUES(?, ?, ?, 'running', ?)")
-      .run(opts.roomId, opts.findingId, opts.requestedBy, nowSec()).lastInsertRowid,
-  );
-  try {
-    const report = await buildReport({ sha256: opts.sha256, claims: opts.claims, finding: opts.finding });
-    d.prepare("UPDATE evidence_runs SET status = 'done', outcome = ?, report_json = ?, report_hash = ?, finished_at = ? WHERE id = ?").run(
-      report.outcome,
-      JSON.stringify(report),
-      reportHash(report),
-      nowSec(),
-      id,
-    );
-    return { id, report };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    d.prepare("UPDATE evidence_runs SET status = 'error', error = ?, finished_at = ? WHERE id = ?").run(msg, nowSec(), id);
-    return { id, report: null, error: msg };
-  }
-}

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { parseEther, type Address, type Hex } from "viem";
 import { releaseBondAbi } from "@/lib/chain/releaseBondArtifact";
-import { api, errorMessage } from "@/lib/client/api";
+import { api, describeRunProgress, errorMessage, waitForEvidence } from "@/lib/client/api";
 import type { Phase } from "@/lib/phase";
 import type { EvidenceReport } from "@/lib/evidence/types";
 import { EvidenceReportView } from "./EvidenceReport";
@@ -138,16 +138,22 @@ export function TriagePanel({ roomId, initial }: { roomId: number; initial: { re
   const { config } = useWallet();
   const [data, setData] = useState(initial);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const run = async () => {
     setError(null);
-    setLoading(true);
+    setProgress("Queuing…");
     try {
-      setData(await api<{ report: EvidenceReport; reportHash?: string | null }>(`/api/rooms/${roomId}/scan`, { method: "POST" }));
+      const r = await api<{ id: number; status: string; report?: EvidenceReport; reportHash?: string | null }>(`/api/rooms/${roomId}/scan`, { method: "POST" });
+      if (r.status === "done" && r.report) {
+        setData({ report: r.report, reportHash: r.reportHash }); // recent cached triage
+      } else {
+        const done = await waitForEvidence<EvidenceReport>(r.id, (s) => setProgress(describeRunProgress(s)));
+        setData({ report: done.report!, reportHash: done.reportHash });
+      }
     } catch (e) {
       setError(errorMessage(e));
     } finally {
-      setLoading(false);
+      setProgress(null);
     }
   };
   return (
@@ -159,8 +165,8 @@ export function TriagePanel({ roomId, initial }: { roomId: number; initial: { re
             The agent proposes what to investigate; the rule engine records facts{config.sandboxEnabled ? " (including a no-network sandbox run)" : ""}. Nothing here is a verdict.
           </p>
         </div>
-        <button className="btn" disabled={!signedIn || loading} onClick={run}>
-          {loading ? "Analysing…" : data ? "Re-run" : "Run triage"}
+        <button className="btn" disabled={!signedIn || !!progress} onClick={run}>
+          {progress ?? (data ? "Re-run" : "Run triage")}
         </button>
       </div>
       <div className="p-4">

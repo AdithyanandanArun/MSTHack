@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import type { Address, Hex } from "viem";
 import { findingHash, OBSERVATION_LABELS, SEVERITIES, type Observation, type Severity } from "@/lib/canonical";
 import { releaseBondAbi } from "@/lib/chain/releaseBondArtifact";
-import { api, errorMessage } from "@/lib/client/api";
+import { api, describeRunProgress, errorMessage, waitForEvidence } from "@/lib/client/api";
 import type { EvidenceReport } from "@/lib/evidence/types";
 import { isoTime, mstc, short, timeAgo } from "@/lib/format";
 import { COMMENT_KIND_LABEL, type CommentKind, type Phase } from "@/lib/phase";
@@ -385,28 +385,31 @@ function AttachmentList({ items }: { items: Attachment[] }) {
 }
 
 function ReproducePanel({ findingId, canRun, onResult }: { findingId: number; canRun: boolean; onResult: (r: { id: number; report: EvidenceReport }) => void }) {
-  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [result, setResult] = useState<{ id: number; report: EvidenceReport } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const run = async () => {
     setError(null);
-    setRunning(true);
+    setResult(null);
+    setProgress("Queuing…");
     try {
-      const r = await api<{ id: number; report: EvidenceReport }>(`/api/findings/${findingId}/reproduce`, { method: "POST" });
+      const { id } = await api<{ id: number }>(`/api/findings/${findingId}/reproduce`, { method: "POST" });
+      const done = await waitForEvidence<EvidenceReport>(id, (s) => setProgress(`Run #${s.id}: ${describeRunProgress(s)}`));
+      const r = { id: done.id, report: done.report! };
       setResult(r);
       onResult(r);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
-      setRunning(false);
+      setProgress(null);
     }
   };
   return (
     <SideBox title="Agent + rule evidence engine">
-      <button className="btn w-full" disabled={!canRun || running} onClick={run}>
-        {running ? "Running rules, sandbox and agent…" : "Run reproduction"}
+      <button className="btn w-full" disabled={!canRun || !!progress} onClick={run}>
+        {progress ?? "Run reproduction"}
       </button>
-      <p className="mt-1 text-xs muted">Re-verifies the artifact hash, re-runs rules and fresh sandboxes, and lets the agent challenge the claim.</p>
+      <p className="mt-1 text-xs muted">Re-verifies the artifact hash, re-runs rules and fresh sandboxes, and lets the agent challenge the claim. Runs in the background; you can keep reading.</p>
       {result && (
         <div className="mt-2 space-y-1">
           <div>Run #{result.id}: <OutcomeLabel outcome={result.report.outcome} /></div>
