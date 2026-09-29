@@ -49,8 +49,8 @@ Scope: a working ReleaseBond web app (GitHub-issues-style findings, threaded adv
   EXPECT: REPO STATE VERIFIED
   EVIDENCE: automatic-evidence=v1; definition-sha256=3db2d3bc5b71572199324fa6c5652bbf4ec7f4fc92a50f7f3585056fa3dbeb0e; exit=0; EXPECT=matched; output-sha256=9ff3c7c9df6dde35607ad258b87ca611dd3059c63f9443c595027c9eff11f604; output-bytes=53; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
 
-- [ ] G9: the ReleaseBond contract is deployed on MST Testnet from the owner's Bridgekey wallet and the app is configured with its address
-  EVIDENCE: pending
+- [x] G9: the ReleaseBond contract is deployed on MST Testnet from the owner's Bridgekey wallet and the app is configured with its address
+  EVIDENCE: 2026-09-29 deployed from the owner's BridgeKey account via /admin: address 0xA3e1622062c55cEf8B5406330798a7d81aAcfb3F, tx 0x2123b33ff529df5710bcf3052f7e36fdf92c66cbb7651d96587bebf8bde7b7cf, block 5798399, owner() = 0x83431e1da2f753bc076dffb2c188575e5b7f8721 (the deployer), 18903 bytes of runtime code on chain; the app stored it (settings contract:91562037) and /api/health reports contract configured and the indexer ok on chain 91562037. Source verified on https://testnet.mstscan.com/address/0xA3e1622062c55cEf8B5406330798a7d81aAcfb3F (ReleaseBond, solc v0.8.28+commit.7893614a).
 
 - [ ] G10: the npm sandbox installs the release's dependency tree (prefetched with scripts disabled, then run offline) and observes an attack hidden in a dependency's install hook while the root package has none; the benign control stays silent
   CHECK: node scripts/check-npm-deps.mjs

@@ -70,6 +70,8 @@ The local chain mines a block every second, so room phases follow the wall clock
 
 ### B. MST Testnet with BridgeKey (the live demo)
 
+**Live deployment:** ReleaseBond runs on MST Testnet at [`0xA3e1622062c55cEf8B5406330798a7d81aAcfb3F`](https://testnet.mstscan.com/address/0xA3e1622062c55cEf8B5406330798a7d81aAcfb3F) with verified source. `npm run demo:mst` uses it, so step 4 (deploy) is already done; steps 1–3 and 5 still apply to anyone running the demo.
+
 1. **Wallet.** Install [BridgeKey](https://chromewebstore.google.com/detail/bridgekey/bfjojdcfenehemjgjlepdjomkpginlkg) and create a wallet. MST Testnet is built in (chain ID 91562037; the coin shows as tMSTC). Open the account menu and use **Add account** until you have five accounts: Account 1 = owner/moderator, Account 2 = developer, Accounts 3–5 = researchers A–C. Roles must be different wallets, because the contract rejects conflicts of interest.
 2. **Funds.** Claim 10 MSTC for Account 1 at [faucet.masterstroke.academy](https://faucet.masterstroke.academy) (captcha). From Account 1, **Send** about 3 MSTC to the developer and 0.5 MSTC to each researcher. The deploy costs about 0.005 MSTC; a commit, reveal or withdrawal costs well under 0.001 MSTC.
 3. **Start the app:** `npm run demo:mst`, then open http://localhost:3000. It builds when needed, keeps MST data in `web/data-mst`, and uses the Docker sandbox if Docker is running.

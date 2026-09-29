@@ -11,18 +11,11 @@ Run `npm run gates` to re-verify everything. Expected: 8 × PASS. G5/G6 need Doc
 | Gate (GATES.md) | Status |
 |---|---|
 | G0–G8 automated | passing at handoff (re-run `npm run gates`) |
-| **G9: deploy to MST Testnet from the owner's Bridgekey wallet** | **NOT DONE — needs a human** (faucet captcha + wallet signature). See below. |
+| G9: deploy to MST Testnet from the owner's BridgeKey wallet | **done 2026-09-29**: `0xA3e1622062c55cEf8B5406330798a7d81aAcfb3F` (block 5798399, source verified on mstscan) |
 
-### Do this first: G9 (deploy on MST Testnet)
+### MST Testnet deployment (G9, done)
 
-1. Install Bridgekey, create 3+ accounts, select MST Testnet, and claim MSTC for each at https://faucet.masterstroke.academy.
-2. `npm run demo:mst`, then open http://localhost:3000/admin (README section B has the full runbook).
-3. Connect Bridgekey → sign in → **Deploy ReleaseBond from my wallet** (≈0.0033 MSTC). The server verifies the bytecode and stores the address in `web/data/releasebond.sqlite` (`settings` table, key `contract:91562037`).
-4. For a shared or production deployment, also pin it in env: `RELEASEBOND_CONTRACT_ADDRESS=0x…` and `RELEASEBOND_DEPLOY_BLOCK=<block>`. Without the deploy block, the indexer would scan from genesis (about 5.8M blocks in 5k chunks).
-5. Record the address and tx in GATES.md G9 `EVIDENCE:` and in the README.
-6. Publish the verified source on the explorer: `npm --prefix contracts run verify:mst -- --address <address> --owner <owner>`. The payload is proven offline (G25) to recompile to the exact bytecode, and MST's Blockscout supports standard-input verification with solc `v0.8.28+commit.7893614a`. The real submission is untested until the contract is deployed.
-
-**BridgeKey was driven for real** (extension 0.2.5 in Chromium against a local chain behind an HTTPS proxy): connect, sign-in, `/admin` deploy, funding a room and committing a finding all work through its approval popups. What is still untested is only the MST-specific part: real MSTC from the faucet and the deploy on MST itself. See the BridgeKey trap below for its limits (no EIP-712).
+ReleaseBond is live on MST Testnet at [`0xA3e1622062c55cEf8B5406330798a7d81aAcfb3F`](https://testnet.mstscan.com/address/0xA3e1622062c55cEf8B5406330798a7d81aAcfb3F) (deploy tx `0x2123b33ff529df5710bcf3052f7e36fdf92c66cbb7651d96587bebf8bde7b7cf`, block 5798399), owned by the BridgeKey account `0x83431e1da2f753bc076dffb2c188575e5b7f8721`, which is also the first moderator. The source is verified on the explorer. `npm run demo:mst` serves the app against it; the address is stored in `web/data-mst` (for another server, set `RELEASEBOND_CONTRACT_ADDRESS=0xA3e1622062c55cEf8B5406330798a7d81aAcfb3F` and `RELEASEBOND_DEPLOY_BLOCK=5798399`). README section B is the runbook for wallets, roles and the demo.
 
 ## Where things live
 
@@ -39,7 +32,7 @@ Run `npm run gates` to re-verify everything. Expected: 8 × PASS. G5/G6 need Doc
 > Dependency-tree execution in the npm sandbox (#4) and a pacman dynamic sandbox (#5) were scoped as GATES.md G10–G12 and then **abandoned without implementation**: testing them needed new fixture packages that imitate credential theft and persistence, and building those was stopped. The owner needs to decide on a test approach (for example, benign canary behaviour only) before anyone picks them up.
 
 
-1. **G9 deployment + Bridgekey click-through** (above).
+1. ~~G9 deployment + BridgeKey click-through~~ **Done** (see above; `npm run check:bridgekey` re-tests the wallet).
 2. **Claude agent path not exercised by tests** (no API key in the build env). Set `ANTHROPIC_API_KEY` and run a reproduction. The default model is `claude-sonnet-5`, overridable with `AGENT_MODEL`. The heuristic analyst runs whenever no key is set, and it is labelled as such in the UI.
 3. ~~Evidence runs are synchronous HTTP requests~~ **Done:** runs are queued in `web/src/lib/server/evidenceQueue.ts` (the `evidence_runs` table is the queue, with `RELEASEBOND_EVIDENCE_CONCURRENCY` runs at a time, default 2). The API returns `202 {id}`, clients poll `GET /api/evidence/:id`, and runs interrupted by a restart are marked as errors. It is still in-process, so for multi-instance deployments move it to a real worker (e.g. BullMQ or a separate process polling the same table).
 4. **npm dependencies are not installed inside the sandbox** (it has no network by design). Only the package's own lifecycle hooks and `require()` run. Next step: pre-fetch the dependency tree into an offline cache that is mounted read-only.
@@ -48,11 +41,11 @@ Run `npm run gates` to re-verify everything. Expected: 8 × PASS. G5/G6 need Doc
 7. **Governance**: one moderator per room, chosen by the developer from the on-chain registry. **Appeals exist:** the author or developer can appeal a verdict once, a *different* registered moderator decides, and settlement is blocked while an appeal is open. **Moderator panels exist** (contract-enforced): a room can name up to 5 co-moderators and a quorum, and `finalizeSettlement` then requires EIP-712 signatures from a quorum over the exact award arrays (`hashAwards`/`settlementDigest`), so the room moderator cannot change amounts after approval. Panelists approve from the settlement tab.
 8. **Hardening**: done — per-wallet rate limits on every write endpoint (sign-in is limited per claimed wallet plus a high global nonce cap, never one shared bucket), per-wallet upload quota, and `npm run backup` / `npm run restore` (consistent SQLite snapshot plus files, sha256 manifest, verified staged restore that rewrites absolute paths). The session secret is already persistent (`data/session.secret`, mode 600, included in backups) unless you set `SESSION_SECRET`. The limiter is in-memory, so move it to Redis for several instances.
 9. The researcher's reveal **nonce is stored server-side** (plus a localStorage backup in the browser), trading some trust for recoverability. The alternative is client-only storage with an export or backup UX.
-10. Explorer links are verified: testnet.mstscan.com is Blockscout, and `/tx/<hash>` and `/address/<addr>` resolve (`scripts/check-explorer.mjs`). Blockscout also has a contract-verification API; publishing the ReleaseBond source there after G9 is a nice next step.
+10. Explorer links are verified: testnet.mstscan.com is Blockscout, and `/tx/<hash>` and `/address/<addr>` resolve (`scripts/check-explorer.mjs`). The deployed contract's source is published there with `npm --prefix contracts run verify:mst` (done for the live deployment).
 
 ## Backend status (audited against the spec)
 
-Every backend requirement in the spec is implemented and covered by gates, except the items that need an owner: G9 (deploy), G10–G12 (the npm dependency and pacman sandboxes, abandoned pending a test approach) and the Claude agent (needs an API key). The most recent additions are:
+Every backend requirement in the spec is implemented and covered by gates, except the items that need an owner: G10–G12 (the npm dependency and pacman sandboxes, abandoned pending a test approach) and the Claude agent (needs an API key). The most recent additions are:
 - **Moderation queue** (`/api/moderation/queue`, dashboard): pending verdicts, appeals this moderator may decide, panel settlements awaiting their signature, deadlines.
 - **Moderator track record** (§33 "moderator histories"): `/api/moderators/:address` and the profile page. It counts the verdicts a moderator *issued*, even when an appeal later overturned them.
 - **Findings overturned on appeal** (§26) and **unresolved objections** (§15). Appeals record the contested verdict at filing time.
