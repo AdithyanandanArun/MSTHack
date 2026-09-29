@@ -41,7 +41,8 @@ const hex32 = z.string().regex(/^0x[0-9a-fA-F]{64}$/);
 export const CreateFinding = z.object({
   title: z.string().trim().min(5).max(200),
   claimedSeverity: z.enum(SEVERITIES),
-  description: z.string().trim().min(20).max(50_000),
+  // Not transformed: the browser hashes the text exactly as typed (e.g. the template's trailing newline).
+  description: z.string().max(50_000).refine((d) => d.trim().length >= 20, "description must be at least 20 characters"),
   proofOfConcept: z.string().max(50_000).default(""),
   reproduction: z.string().max(20_000).default(""),
   observations: z.array(z.enum(OBSERVATIONS)).max(OBSERVATIONS.length).default([]),

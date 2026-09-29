@@ -148,7 +148,7 @@ function content(roomId: number, over: Partial<FindingContent>): FindingContent 
     title: "postinstall reads ~/.ssh keys and posts them to 203.0.113.10",
     claimedSeverity: "critical",
     description:
-      "## Summary\n`scripts/telemetry.js` runs on install, reads `~/.ssh/demo_key` and `AWS_SECRET_ACCESS_KEY`, and POSTs them to a hard-coded IP.",
+      "## Summary\n`scripts/telemetry.js` runs on install, reads `~/.ssh/demo_key` and `AWS_SECRET_ACCESS_KEY`, and POSTs them to a hard-coded IP.\n", // trailing newline, as the editor template leaves it
     proofOfConcept: "```\nnpm install releasebond-demo-telemetry@2.0.0\n```",
     reproduction: "1. Clean sandbox with a canary key\n2. npm install\n3. Observe open() of the key and connect() to 203.0.113.10:443",
     observations: ["INSTALL_SCRIPT", "FS_SENSITIVE_READ", "NETWORK_EGRESS", "ENV_SECRET_READ"],
