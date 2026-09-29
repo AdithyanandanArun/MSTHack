@@ -19,12 +19,12 @@ export default async function AdminPage() {
         <div className="card-header"><h2 className="font-semibold">Network</h2></div>
         <div className="grid gap-2 p-4 text-sm sm:grid-cols-2">
           <div>Chain: <b>{cfg.chainName}</b> (id {cfg.chainId})</div>
-          <div>RPC: <span className="mono">{cfg.rpcUrl}</span></div>
+          <div>RPC: <span className="mono break-all">{cfg.rpcUrl}</span></div>
           <div>
             Contract:{" "}
             {cfg.contractAddress ? <ExplorerLink explorer={cfg.explorerUrl} kind="address" value={cfg.contractAddress}>{cfg.contractAddress}</ExplorerLink> : <b style={{ color: "var(--attention)" }}>not deployed</b>}
           </div>
-          <div>Owner: <span className="mono">{owner ?? "—"}</span></div>
+          <div>Owner: <span className="mono break-all">{owner ?? "—"}</span></div>
           <div>Evidence agent: <b>{cfg.agentMode === "claude" ? "Claude (ANTHROPIC_API_KEY set)" : "heuristic analyst"}</b></div>
           <div>Dynamic sandbox: <b>{cfg.sandboxEnabled ? "Docker (no network, strace)" : "disabled"}</b></div>
         </div>

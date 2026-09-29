@@ -56,7 +56,7 @@ export default async function Home() {
               return (
                 <li key={r.id} className="flex flex-wrap items-center gap-3 border-t px-4 py-3 first:border-t-0" style={{ borderColor: "var(--border-muted)" }}>
                   <span className="label mono" style={{ borderColor: "var(--border)" }}>{r.ecosystem}</span>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-60">
                     <Link href={`/rooms/${r.id}`} className="text-base font-semibold">
                       {r.package_name}@{r.version}
                     </Link>

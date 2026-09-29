@@ -41,14 +41,14 @@ export default async function ResearcherPage({ params }: { params: Promise<{ add
   }[];
 
   return (
-    <div className="grid gap-6 md:grid-cols-[260px_1fr]">
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-[260px_minmax(0,1fr)]">
       <aside className="space-y-2">
-        <div className="flex h-24 w-24 items-center justify-center rounded-full text-3xl font-semibold" style={{ background: `hsl(${parseInt(address.slice(2, 6), 16) % 360} 60% 45%)`, color: "#fff" }}>
+        <div className="flex h-24 w-24 items-center justify-center rounded-full text-3xl font-semibold" style={{ background: `hsl(${parseInt(address.slice(2, 6), 16) % 360} 60% 35%)`, color: "#fff" }}>
           {(user?.handle ?? "R")[0].toUpperCase()}
         </div>
         <h1 className="text-xl font-semibold">{user?.handle ?? (user ? `Researcher #${user.researcher_no}` : short(address))}</h1>
-        {user && <div className="muted">Researcher #{user.researcher_no}</div>}
-        <div className="mono break-all"><ExplorerLink explorer={cfg.explorerUrl} kind="address" value={address}>{address}</ExplorerLink></div>
+        {user?.handle && <div className="muted">Researcher #{user.researcher_no}</div>}
+        <div className="mono break-all [text-wrap:balance]"><ExplorerLink explorer={cfg.explorerUrl} kind="address" value={address}>{address}</ExplorerLink></div>
         <div className="flex flex-wrap gap-1">
           {user?.verified ? <Label tone="success">verified human</Label> : <Label>not verified</Label>}
           {isModerator(address) && <Label tone="done">moderator</Label>}

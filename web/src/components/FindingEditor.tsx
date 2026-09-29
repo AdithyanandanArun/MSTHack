@@ -98,7 +98,7 @@ export function FindingEditor({ roomId, artifactHash, packageLabel }: { roomId: 
   const valid = title.trim().length >= 5 && description.trim().length >= 20;
 
   return (
-    <div className="grid gap-6 md:grid-cols-[1fr_280px]">
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_280px]">
       <div className="space-y-4">
         <input className="input text-base" placeholder="Title — e.g. postinstall reads ~/.ssh keys and posts them to a remote host" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
         <div>

@@ -86,10 +86,14 @@ export default async function RoomPage({ params, searchParams }: { params: Promi
             </div>
           ) : null}
         </div>
-        <div className="text-right">
+        <div className="flex items-center gap-3 sm:block sm:text-right">
           <PhaseBadge phase={phase} large />
-          <div className="mt-1 text-2xl font-semibold">{mstc(room.bounty_wei)}</div>
-          <div className="text-xs muted">security pool, escrowed on-chain</div>
+          <div>
+            <div className="text-2xl font-semibold sm:mt-1">{mstc(room.bounty_wei)}</div>
+            <div className="text-xs muted">
+              {phase === "settled" ? "security pool, paid out on-chain" : phase === "refunded" ? "security pool, returned to the developer" : "security pool, escrowed on-chain"}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -176,16 +180,18 @@ export default async function RoomPage({ params, searchParams }: { params: Promi
                 const k = f ? counts.get(f.id) ?? {} : {};
                 return (
                   <li key={c.idx} className="flex flex-wrap items-center gap-3 border-t px-4 py-3 first:border-t-0" style={{ borderColor: "var(--border-muted)" }}>
-                    <span title={item?.verdict ?? "open"} style={{ color: item?.verdict === "valid" ? "var(--done)" : item?.verdict === "invalid" ? "var(--danger)" : "var(--success)" }}>
+                    <span title={item?.verdict ?? "open"} style={{ color: item?.verdict ? VERDICT_DOT[item.verdict] ?? "var(--fg-muted)" : "var(--success)" }}>
                       ●
                     </span>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1 basis-64">
                       {item?.visible && f ? (
                         <Link href={`/rooms/${room.id}/findings/${f.id}`} className="text-base font-semibold" style={{ color: "var(--fg)" }}>
                           {item.title}
                         </Link>
                       ) : (
-                        <span className="font-semibold muted">Private finding (commitment {short(c.commitment, 8)})</span>
+                        <>
+                          <span className="font-semibold muted">Private finding</span> <span className="mono muted" title={c.commitment}>{short(c.commitment, 8)}</span>
+                        </>
                       )}{" "}
                       {item?.visible && <SeverityLabel severity={item.claimedSeverity} prefix="claimed" />}{" "}
                       {item?.verdict && <VerdictLabel verdict={item.verdict} />} {item?.finalSeverity && <SeverityLabel severity={item.finalSeverity} />}{" "}
@@ -222,6 +228,8 @@ export default async function RoomPage({ params, searchParams }: { params: Promi
     </div>
   );
 }
+
+const VERDICT_DOT: Record<string, string> = { valid: "var(--done)", duplicate: "var(--done)", invalid: "var(--danger)", inconclusive: "var(--attention)" };
 
 function latestTriage(roomId: number): { report: EvidenceReport; reportHash: string | null } | null {
   const row = db()
@@ -298,7 +306,7 @@ async function SettlementTab({ roomId, viewerAddress, explorer }: { roomId: numb
               </ul>
               <div className="text-xs muted">
                 Settlement tx <ExplorerLink explorer={explorer} kind="tx" value={p.room.settle_tx ?? ""} /> · on-chain adjudication hash{" "}
-                <span className="mono">{p.room.adjudication_hash}</span>
+                <span className="mono break-all">{p.room.adjudication_hash}</span>
               </div>
             </>
           ) : (

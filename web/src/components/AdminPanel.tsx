@@ -46,7 +46,7 @@ export function DeployContract({ hasContract, isOwner }: { hasContract: boolean;
       {hasContract && <p className="text-sm" style={{ color: "var(--attention)" }}>A contract is already configured; deploying again replaces it for this server.</p>}
       <button className="btn btn-primary" disabled={!signedIn || !account} onClick={deploy}>Deploy ReleaseBond from my wallet</button>
       {!signedIn && <span className="ml-2 text-sm muted">Sign in first.</span>}
-      {done && <div className="flash flash-success">Deployed and registered at <span className="mono">{done}</span>.</div>}
+      {done && <div className="flash flash-success">Deployed and registered at <span className="mono break-all">{done}</span>.</div>}
       {error && <div className="flash flash-error">{error}</div>}
     </div>
   );
@@ -75,7 +75,7 @@ export function ModeratorAdmin({ moderators }: { moderators: string[] }) {
       <ul className="space-y-1">
         {moderators.map((m) => (
           <li key={m} className="flex items-center gap-2">
-            <span className="mono">{m}</span>
+            <span className="mono break-all">{m}</span>
             <button className="btn btn-sm btn-danger" onClick={() => set(m, false)}>remove</button>
           </li>
         ))}

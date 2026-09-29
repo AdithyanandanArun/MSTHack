@@ -26,7 +26,7 @@ export function FactTable({ facts, empty = "No findings from the deterministic r
   if (!facts.length) return <p className="muted text-sm">{empty}</p>;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full min-w-[640px] text-sm">
         <thead>
           <tr className="text-left text-xs muted">
             <th className="py-1 pr-2">Fact</th>
@@ -44,7 +44,7 @@ export function FactTable({ facts, empty = "No findings from the deterministic r
                 <Label tone={SEV_TONE[f.severity]}>{f.severity}</Label>
               </td>
               <td className="py-1.5 pr-2 mono">{f.observation ?? f.category}</td>
-              <td className="py-1.5 pr-2 mono break-all">
+              <td className="py-1.5 pr-2 mono whitespace-nowrap">
                 {f.file ? `${f.file}${f.line ? `:${f.line}` : ""}` : "—"}
               </td>
               <td className="py-1.5">

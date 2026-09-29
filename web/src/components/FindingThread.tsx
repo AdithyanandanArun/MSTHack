@@ -236,7 +236,7 @@ export function FindingThread({ d, now, explorer }: { d: FindingDetail; now: num
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[1fr_300px]">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_300px]">
         <div>
           <div className="card">
             <div className="card-header py-2 text-sm">
@@ -277,7 +277,7 @@ export function FindingThread({ d, now, explorer }: { d: FindingDetail; now: num
                 <Markdown>{f.verdictReasoning ?? ""}</Markdown>
                 {f.materialReviewers.length > 0 && (
                   <div className="mt-2 text-xs">
-                    Material review contributors: {f.materialReviewers.map((a) => <span key={a} className="mr-2"><Researcher who={{ address: a }} /></span>)}
+                    Material review contributors: {f.materialReviewers.map((a) => <span key={a} className="mr-2"><Researcher who={d.comments.find((c) => c.author.address === a)?.author ?? { address: a }} /></span>)}
                   </div>
                 )}
                 {f.awardWei && <div className="mt-2"><Label tone="done">awarded {mstc(f.awardWei)}</Label></div>}
