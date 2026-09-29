@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useState } from "react";
 import { decodeEventLog, parseEther, type Address, type Hex } from "viem";
@@ -33,7 +34,7 @@ const ADJ = [
   { label: "30 days", s: 30 * 86400 },
 ];
 
-export function NewRoomForm() {
+export function NewRoomForm({ verifiedResearchers }: { verifiedResearchers: number }) {
   const router = useRouter();
   const { config, account, sendTx, publicClient, walletId } = useWallet();
   const signedIn = useSignedIn();
@@ -194,6 +195,11 @@ export function NewRoomForm() {
         <section className="card">
           <div className="card-header"><h2 className="font-semibold">2. Fund the security room</h2></div>
           <div className="grid gap-4 p-4 sm:grid-cols-2">
+            {artifact.activeRoom && (
+              <div className="flash flash-warn text-sm sm:col-span-2">
+                {artifact.activeRoom.message} <Link href={`/rooms/${artifact.activeRoom.id}`}>Open room #{artifact.activeRoom.id}</Link>
+              </div>
+            )}
             <label className="sm:col-span-2">
               <span className="field-label">Title (optional)</span>
               <input className="input" maxLength={140} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. New streaming parser and install-time telemetry" />
@@ -270,18 +276,23 @@ export function NewRoomForm() {
             <label className="flex items-start gap-2 text-sm sm:col-span-2">
               <input type="checkbox" className="mt-1" checked={requireVerified} onChange={(e) => setRequireVerified(e.target.checked)} />
               <span>
-                <b>Verified researchers only.</b> Only wallets a moderator has verified as human researchers may submit reports. This is
-                enforced by ReleaseBond when reports are submitted; the contract itself accepts any commitment, but unverified commitments
-                have no report to review or pay.
+                <b>Verified researchers only</b> (usually off). Only wallets a moderator has verified as human researchers on the Admin page may
+                submit reports; everyone else is turned away. {verifiedResearchers === 0 ? "No researcher is verified yet." : `${verifiedResearchers} researcher${verifiedResearchers === 1 ? " is" : "s are"} verified.`}
               </span>
             </label>
+            {requireVerified && verifiedResearchers === 0 && (
+              <div className="flash flash-warn text-sm sm:col-span-2">
+                Nobody could submit a finding to this room: no researcher has been verified yet. Untick this, or have a moderator verify
+                researchers first (Admin → Researcher verification).
+              </div>
+            )}
             <div className="text-xs muted sm:col-span-2">
               The bounty is escrowed by the ReleaseBond contract. Researchers can verify it before they start. After the hunt and
               disclosure window, the moderator adjudicates and the contract pays valid findings; any remainder returns to you. If
               nobody commits a finding you can reclaim the pool; if the moderator misses the deadline anyone can return it to you.
             </div>
             <div className="sm:col-span-2">
-              <button className="btn btn-primary" disabled={!signedIn || !moderators.length} onClick={openRoom}>
+              <button className="btn btn-primary" disabled={!signedIn || !moderators.length || (requireVerified && verifiedResearchers === 0) || !!artifact.activeRoom} onClick={openRoom}>
                 Lock {bounty} MSTC and open the room
               </button>
             </div>

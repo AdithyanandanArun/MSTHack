@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { json, route } from "@/lib/server/api";
 import { requireSession } from "@/lib/server/auth";
-import { contractInfo } from "@/lib/server/config";
+import { chainNow, contractInfo } from "@/lib/server/config";
 import { db, nowSec } from "@/lib/server/db";
 import { getArtifact } from "@/lib/server/evidence";
-import { HttpError, isModerator } from "@/lib/server/queries";
+import { HttpError, isModerator, openRoomNotice } from "@/lib/server/queries";
 import { enforceLimit } from "@/lib/server/rateLimit";
 
 const Body = z.object({
@@ -43,10 +43,8 @@ export const POST = route(async (req) => {
   if (panel.length === 0 ? body.panelQuorum !== 0 : body.panelQuorum < 1 || body.panelQuorum > panel.length) {
     throw new HttpError(400, "panel quorum must be between 1 and the panel size");
   }
-  const active = db().prepare("SELECT id FROM rooms WHERE artifact_hash = ? AND developer = ? AND status = 'active'").get(`0x${art.sha256}`, developer) as
-    | { id: number }
-    | undefined;
-  if (active) throw new HttpError(409, `you already have an active room for this exact artifact (#${active.id})`);
+  const open = openRoomNotice(`0x${art.sha256}`, developer, await chainNow());
+  if (open) throw new HttpError(409, open.message);
 
   db()
     .prepare(

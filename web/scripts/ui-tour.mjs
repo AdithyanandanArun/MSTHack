@@ -248,6 +248,38 @@ try {
   await withdraw.click();
   await a.page.waitForFunction(() => [...document.querySelectorAll("button")].some((x) => x.textContent === "Withdraw to wallet" && x.disabled), null, { timeout: TX_TIMEOUT });
 
+  step("developer reclaims an empty room and funds the same release again");
+  async function verifyBenign() {
+    await dev.page.goto(`${BASE}/rooms/new`);
+    await dev.page.getByText("Upload artifact").click();
+    await dev.page.locator('input[type="file"]').nth(0).setInputFiles(path.join(ROOT, "demo/artifacts/releasebond-benign-utils-1.0.0.tgz"));
+    await dev.page.getByRole("button", { name: "Fetch & verify artifact" }).click();
+    const lockBtn = dev.page.getByRole("button", { name: /^Lock .* and open the room$/ });
+    await lockBtn.waitFor({ timeout: 120_000 });
+    return lockBtn;
+  }
+  async function fundBenign() {
+    const lockBtn = await verifyBenign();
+    await dev.page.getByLabel("Hunt duration").selectOption({ label: "3 minutes (demo)" });
+    await dev.page.getByLabel("Private disclosure / patch window").selectOption({ label: "2 minutes (demo)" });
+    await lockBtn.click();
+    await dev.page.waitForURL(/\/rooms\/\d+$/, { timeout: TX_TIMEOUT });
+    return new URL(dev.page.url()).pathname;
+  }
+  const emptyRoom = await fundBenign();
+  await advance(181);
+  // The form explains the open room right after verification and will not let the developer fund it twice.
+  const lockWhileOpen = await verifyBenign();
+  await dev.page.getByText(/ended with no findings.*Reclaim unused pool/).waitFor();
+  if (!(await lockWhileOpen.isDisabled())) throw new Error("Lock stays enabled while the release has an open room");
+  await dev.page.getByRole("link", { name: /^Open room #\d+$/ }).click();
+  await dev.page.waitForURL((u) => u.pathname === emptyRoom);
+  await dev.page.getByRole("button", { name: "Reclaim unused pool" }).click();
+  await dev.page.locator("span.rounded-full", { hasText: /^Refunded$/ }).waitFor({ timeout: TX_TIMEOUT });
+  const refunded = await fundBenign();
+  if (refunded === emptyRoom) throw new Error("funding the same release again did not open a new room");
+  await dev.page.locator("span.rounded-full", { hasText: /^Hunting$/ }).waitFor();
+
   step("auditing every page after settlement");
   await audit("home (with room)", "/", null);
   await audit("room findings (settled)", roomPath, null);

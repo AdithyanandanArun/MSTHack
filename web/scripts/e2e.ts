@@ -579,6 +579,48 @@ async function main() {
   const hj = (await health.json()) as { status: string; checks: Record<string, string>; chainId: number };
   assert(health.status === 200 && hj.status === "ready" && hj.checks.rpc === "ok" && hj.chainId === chain.id, "health endpoint reports ready against the local chain");
 
+  console.log("• funding the same release again: guided while a room is open, allowed once its pool is reclaimed");
+  {
+    const register = async () => {
+      const f = new FormData();
+      f.set("ecosystem", "npm");
+      f.set("file", new Blob([fs.readFileSync(path.join(ARTIFACTS, "releasebond-benign-utils-1.0.0.tgz"))]), "benign.tgz");
+      return dev.ok<{ sha256: string; activeRoom: { id: number; message: string } | null }>("POST", "/api/artifacts", f);
+    };
+    const benign = await register();
+    assert(benign.activeRoom === null, "a release with no open room can be funded");
+    const draftBody = { artifactSha256: benign.sha256, moderator: owner.address };
+    const fund = async () => {
+      const d = await dev.ok<{ params: Record<string, unknown> }>("POST", "/api/rooms/draft", draftBody);
+      const hash = await dev.tx("createRoom", [{ ...d.params, huntDuration: 60n, disclosureDuration: 60n, adjudicationWindow: 86400n }], parseEther("1"));
+      const logs = (await pub.getTransactionReceipt({ hash })).logs;
+      await dev.ok("POST", "/api/chain/sync", { txHash: hash });
+      for (const l of logs) {
+        try {
+          const ev = decodeEventLog({ abi: releaseBondAbi, data: l.data, topics: l.topics });
+          if (ev.eventName === "RoomCreated") return Number(ev.args.roomId);
+        } catch {
+          /* other logs */
+        }
+      }
+      throw new Error("no RoomCreated event");
+    };
+    const first = await fund();
+    const hunting = await dev.req<{ error: string }>("POST", "/api/rooms/draft", draftBody);
+    assert(hunting.status === 409 && hunting.data.error.includes(`Room #${first}`) && hunting.data.error.includes("still hunting"), "funding the release again while its room hunts is refused, naming the room");
+    assert((await register()).activeRoom?.id === first, "the funding form learns about the open room as soon as the artifact is verified");
+    await advance(61, dev);
+    const empty = await dev.req<{ error: string }>("POST", "/api/rooms/draft", draftBody);
+    assert(empty.status === 409 && empty.data.error.includes("Reclaim unused pool"), "after an empty hunt the refusal says to reclaim the pool first (the contract allows one open room per release)");
+    const reclaim = await dev.tx("reclaimUnused", [BigInt(first)]);
+    await dev.ok("POST", "/api/chain/sync", { txHash: reclaim });
+    const old = await dev.ok<{ room: { status: string; refunded_wei: string } }>("GET", `/api/rooms/${first}`);
+    assert(old.room.status === "refunded" && old.room.refunded_wei === parseEther("1").toString(), "the empty room's pool is reclaimed and the room shows as refunded");
+    assert((await register()).activeRoom === null, "no open-room notice once the pool is reclaimed");
+    const second = await fund();
+    assert(second > first, "the same release can be funded again after reclaiming");
+  }
+
   console.log("• in-app deployment registration (/admin)");
   const deployAndRegister = async (who: Actor, bytecode: Hex, args: unknown[] = []) => {
     const hash = await who.wallet.deployContract({ abi: args.length ? releaseBondAbi : [], bytecode, args, account: who.account, chain } as never);

@@ -3,6 +3,8 @@ import { Label } from "./Labels";
 
 export interface ArtifactView {
   sha256: string;
+  /** This developer's open room for the release, if any (a release can have one open room at a time). */
+  activeRoom?: { id: number; message: string } | null;
   ecosystem: string;
   name: string;
   version: string;

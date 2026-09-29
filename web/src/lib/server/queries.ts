@@ -294,3 +294,27 @@ export function roomPanel(roomId: number): { panel: string[]; quorum: number } |
     | undefined;
   return row ? { panel: JSON.parse(row.panel_json), quorum: row.quorum } : null;
 }
+
+/**
+ * ReleaseBond allows one open room per release per developer (the contract reverts with
+ * ArtifactHasActiveRoom until that room is settled or its pool returned). Explains what the
+ * developer has to do before funding `artifactHash` again, or returns null when they can.
+ */
+export function openRoomNotice(artifactHash: string, developer: string, now: number): { id: number; message: string } | null {
+  const r = db().prepare("SELECT * FROM rooms WHERE artifact_hash = ? AND developer = ? AND status = 'active'").get(artifactHash.toLowerCase(), developer.toLowerCase()) as
+    | RoomRow
+    | undefined;
+  if (!r) return null;
+  const phase = roomPhase(r, now);
+  const findings = roomCommitments(r.id).length;
+  const message =
+    phase === "hunting"
+      ? `Room #${r.id} for this exact release is still hunting. A release can have one open room at a time, so wait until it finishes.`
+      : phase === "expired"
+        ? `Room #${r.id} for this release passed its adjudication deadline. Open it and click "Return expired pool to developer", then fund again.`
+        : findings === 0
+          ? `Room #${r.id} for this release ended with no findings. Open it and click "Reclaim unused pool" to get the bounty back, then fund again.`
+          : `Room #${r.id} for this release still has findings to adjudicate. Its moderator must settle it before this release can be funded again.`;
+  return { id: r.id, message };
+}
+
