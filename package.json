@@ -9,9 +9,12 @@
     "advance-time": "node scripts/advance-time.mjs",
     "test": "npm --prefix contracts test && npm --prefix web test",
     "e2e": "node scripts/check-e2e.mjs",
+    "check:ui": "node scripts/check-ui.mjs",
+    "check:bridgekey": "node scripts/check-ui.mjs --tour scripts/bridgekey-tour.mjs",
     "gates": "node scripts/run-gates.mjs",
     "backup": "node scripts/backup.mjs",
     "restore": "node scripts/restore.mjs",
+    "demo:mst": "node scripts/demo-mst.mjs",
     "deploy:mst": "npm --prefix contracts run deploy:mst"
   },
   "license": "MIT"
