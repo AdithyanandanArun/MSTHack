@@ -37,6 +37,11 @@ export function createNonce(): string {
   return nonce;
 }
 
+/** "example.com:3000" -> "example.com"; "[::1]:3000" -> "[::1]". */
+export function hostnameOf(host: string): string {
+  return host.startsWith("[") ? host.slice(0, host.indexOf("]") + 1) : host.replace(/:\d+$/, "");
+}
+
 export class AuthError extends Error {
   status = 401;
 }
@@ -50,7 +55,10 @@ export async function verifySiwe(message: string, signature: Hex, scheme: SignIn
   if (!parsed.address || !parsed.nonce || !parsed.domain) throw new AuthError("malformed sign-in message");
 
   const host = (await headers()).get("host");
-  if (host && parsed.domain !== host) throw new AuthError(`sign-in message is for ${parsed.domain}, not ${host}`);
+  // host:port per EIP-4361, or the bare hostname that some wallets (BridgeKey) insist on.
+  if (host && parsed.domain !== host && parsed.domain !== hostnameOf(host)) {
+    throw new AuthError(`sign-in message is for ${parsed.domain}, not ${host}`);
+  }
   if (parsed.chainId !== appConfig().chainId) throw new AuthError("sign-in message targets the wrong chain");
   if (parsed.expirationTime && parsed.expirationTime.getTime() < Date.now()) throw new AuthError("message expired");
   if (parsed.issuedAt && Math.abs(parsed.issuedAt.getTime() - Date.now()) > NONCE_TTL * 1000) {

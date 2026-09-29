@@ -85,10 +85,10 @@ class Actor {
     if (r.status >= 400) throw new Error(`${this.name} ${method} ${p} -> ${r.status} ${JSON.stringify(r.data)}`);
     return r.data;
   }
-  async signInMessage() {
+  async signInMessage(domain = new URL(BASE).host) {
     const { nonce } = await this.ok<{ nonce: string }>("POST", "/api/auth/nonce");
     return createSiweMessage({
-      domain: new URL(BASE).host,
+      domain,
       address: this.account.address,
       statement: "Sign in to ReleaseBond.",
       uri: BASE,
@@ -179,7 +179,15 @@ async function main() {
       new Actor(["owner/moderator", "developer", "alice", "bob", "carol", "dave", "erin (appeals moderator)", "frank (panel moderator)"][i], privateKeyToAccount(k)),
   );
   console.log("• sign in all wallets with SIWE");
-  for (const a of [owner, dev, alice, carol, dave, erin, frank]) await a.signIn();
+  for (const a of [owner, dev, alice, carol, dave, erin]) await a.signIn();
+  {
+    // BridgeKey only accepts a SIWE domain equal to the page hostname (no port); the server allows both.
+    const message = await frank.signInMessage(new URL(BASE).hostname);
+    await frank.ok("POST", "/api/auth/verify", { message, signature: await frank.account.signMessage({ message }) });
+    const foreign = await frank.signInMessage("evil.example");
+    const r = await frank.req("POST", "/api/auth/verify", { message: foreign, signature: await frank.account.signMessage({ message: foreign }) });
+    assert(r.status === 401, "sign-in accepts the bare hostname but still rejects another domain");
+  }
   {
     // A personal_sign signature must not pass as the EIP-712 scheme (and vice versa).
     const message = await bob.signInMessage();

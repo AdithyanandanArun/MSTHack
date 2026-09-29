@@ -34,7 +34,7 @@ const ADJ = [
 
 export function NewRoomForm() {
   const router = useRouter();
-  const { config, account, sendTx, publicClient } = useWallet();
+  const { config, account, sendTx, publicClient, walletId } = useWallet();
   const signedIn = useSignedIn();
   const [mode, setMode] = useState<"registry" | "upload">("registry");
   const [ecosystem, setEcosystem] = useState<"npm" | "pacman">("npm");
@@ -236,6 +236,11 @@ export function NewRoomForm() {
                 <p className="mb-1 text-xs muted">
                   Panel members must approve the exact settlement with a wallet signature before the contract pays anything.
                 </p>
+                {walletId === "io.bridgekey.wallet" && (
+                  <p className="mb-1 text-xs" style={{ color: "var(--attention)" }}>
+                    BridgeKey cannot sign these approvals yet (no EIP-712 support), so leave the panel empty if every moderator uses BridgeKey.
+                  </p>
+                )}
                 {moderators
                   .filter((m) => m !== (moderator || moderators[0]))
                   .map((m) => (

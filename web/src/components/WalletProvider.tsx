@@ -56,6 +56,8 @@ interface WalletState {
   options: WalletOption[];
   account: Address | null;
   walletChainId: number | null;
+  /** EIP-6963 rdns (e.g. "io.bridgekey.wallet") of the connected wallet, or "dev-N" / "window.ethereum". */
+  walletId: string | null;
   session: Session;
   busy: string | null;
   connect: (optionId: string) => Promise<void>;
@@ -178,6 +180,23 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
     [config.chainId],
   );
 
+  // Follow account switches made inside the wallet. BridgeKey only emits accountsChanged for accounts
+  // already connected to this site, so also poll eth_accounts (answered locally, no popup).
+  useEffect(() => {
+    const opt = activeRef.current;
+    if (!account || opt?.kind !== "injected") return;
+    const t = setInterval(async () => {
+      try {
+        const accounts = (await opt.provider!.request({ method: "eth_accounts" })) as string[];
+        const next = accounts[0] ? getAddress(accounts[0]) : null;
+        if (next !== account) setAccount(next);
+      } catch {
+        /* wallet busy or locked; try again on the next tick */
+      }
+    }, 2_000);
+    return () => clearInterval(t);
+  }, [account]);
+
   // Silently reconnect the last wallet (no popup).
   useEffect(() => {
     const last = localStorage.getItem(LAST_WALLET);
@@ -247,7 +266,9 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
     try {
       const { nonce } = await api<{ nonce: string }>("/api/auth/nonce", { method: "POST" });
       const message = createSiweMessage({
-        domain: window.location.host,
+        // BridgeKey warns unless the domain equals the page hostname without its port; other wallets
+        // (per EIP-4361) expect host:port. The server accepts either for this host.
+        domain: activeRef.current?.id === "io.bridgekey.wallet" ? window.location.hostname : window.location.host,
         address: account,
         statement: "Sign in to ReleaseBond. This signature does not send a transaction or cost gas.",
         uri: window.location.origin,
@@ -305,6 +326,14 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
       try {
         await ensureChain();
         return await walletClient().signTypedData(args as Parameters<SigningClient["signTypedData"]>[0]);
+      } catch (e) {
+        // BridgeKey 0.2.5, for one, implements personal_sign but not eth_signTypedData_v4.
+        if (isUnsupportedMethodError(e)) {
+          throw new Error(
+            `${activeRef.current?.name ?? "This wallet"} cannot sign EIP-712 typed data (eth_signTypedData_v4). Use a wallet that supports it, such as MetaMask, for this step.`,
+          );
+        }
+        throw e;
       } finally {
         setBusy(null);
       }
@@ -318,6 +347,7 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
     options,
     account,
     walletChainId,
+    walletId: account ? activeRef.current?.id ?? null : null,
     session,
     busy,
     connect,

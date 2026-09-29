@@ -113,12 +113,29 @@ export function WalletButton() {
 }
 
 export function BusyToast() {
-  const { busy } = useWallet();
+  const { busy, walletId } = useWallet();
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    setSlow(false);
+    if (!busy) return;
+    const t = setTimeout(() => setSlow(true), 8_000);
+    return () => clearTimeout(t);
+  }, [busy]);
   if (!busy) return null;
+  // Only wallet prompts can stall; chain waits ("waiting for block", "indexing") just take time.
+  const waitingOnWallet = /wallet|Signing in/i.test(busy);
   return (
-    <div className="card fixed right-4 bottom-4 z-50 flex items-center gap-2 px-4 py-3 shadow-lg">
-      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
-      {busy}
+    <div className="card fixed right-4 bottom-4 z-50 max-w-sm px-4 py-3 shadow-lg">
+      <div className="flex items-center gap-2">
+        <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+        {busy}
+      </div>
+      {slow && waitingOnWallet && (
+        <p className="mt-2 text-xs muted">
+          {walletId === "io.bridgekey.wallet" ? "Click the BridgeKey icon in the toolbar and approve the request. " : "Open your wallet and approve the request. "}
+          If older requests are queued there, reject them, then reload this page and try once more.
+        </p>
+      )}
     </div>
   );
 }
