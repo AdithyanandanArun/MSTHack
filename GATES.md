@@ -44,10 +44,10 @@ Scope: a working ReleaseBond web app (GitHub-issues-style findings, threaded adv
   EXPECT: PACMAN ADAPTER VERIFIED
   EVIDENCE: automatic-evidence=v1; definition-sha256=efa97e4e52ba5a38516418a8f1f9346854b23cadcc12955e326f946ff3d1777e; exit=0; EXPECT=matched; output-sha256=173194b171d12ad979dfbc8fb2a8ea7e019d8ad5945871b8852fd78ad11105db; output-bytes=602; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
 
-- [ ] G8: history has several granular commits, none carrying a Claude co-author trailer, and origin/main equals local HEAD with a clean tree and handoff docs present
+- [x] G8: history has several granular commits, none carrying a Claude co-author trailer, and origin/main equals local HEAD with a clean tree and handoff docs present
   CHECK: node scripts/check-repo.mjs
   EXPECT: REPO STATE VERIFIED
-  EVIDENCE: pending
+  EVIDENCE: automatic-evidence=v1; definition-sha256=3db2d3bc5b71572199324fa6c5652bbf4ec7f4fc92a50f7f3585056fa3dbeb0e; exit=0; EXPECT=matched; output-sha256=9ff3c7c9df6dde35607ad258b87ca611dd3059c63f9443c595027c9eff11f604; output-bytes=53; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
 
 - [ ] G9: the ReleaseBond contract is deployed on MST Testnet from the owner's Bridgekey wallet and the app is configured with its address
   EVIDENCE: pending
