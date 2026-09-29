@@ -7,15 +7,13 @@ import { db } from "@/lib/server/db";
 import { pendingWithdrawal } from "@/lib/server/onchain";
 import { moderatorQueue } from "@/lib/server/moderation";
 import { formatDuration } from "@/lib/phase";
-import { currentViewer, roomPhase, type FindingRow, type RoomRow } from "@/lib/server/queries";
+import { requireSignedIn } from "@/lib/server/guard";
+import { roomPhase, type FindingRow, type RoomRow } from "@/lib/server/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const viewer = await currentViewer();
-  if (!viewer.address || !viewer.user) {
-    return <div className="flash flash-info">Connect your wallet and sign in to see your dashboard.</div>;
-  }
+  const viewer = await requireSignedIn("/dashboard");
   const now = await chainNow();
   const d = db();
   const findings = d

@@ -45,7 +45,7 @@ interface WalletOption {
   privateKey?: `0x${string}`;
 }
 
-interface Session {
+export interface Session {
   address: string | null;
   isModerator: boolean;
   user: { researcher_no: number; handle: string | null; verified: number } | null;
@@ -89,7 +89,16 @@ const DEV_ROLES = ["owner / moderator", "developer", "researcher A", "researcher
 
 const LAST_WALLET = "rb:last-wallet";
 
-export function WalletProvider({ config, children }: { config: ClientConfig; children: React.ReactNode }) {
+export function WalletProvider({
+  config,
+  initialSession,
+  children,
+}: {
+  config: ClientConfig;
+  /** Session read from the cookie on the server, so the header is right on the first paint. */
+  initialSession: Session;
+  children: React.ReactNode;
+}) {
   const router = useRouter();
   const chain = useMemo(() => chainByKey(config.chainKey), [config.chainKey]);
   const publicClient = useMemo(
@@ -99,7 +108,7 @@ export function WalletProvider({ config, children }: { config: ClientConfig; chi
   const [injected, setInjected] = useState<WalletOption[]>([]);
   const [account, setAccount] = useState<Address | null>(null);
   const [walletChainId, setWalletChainId] = useState<number | null>(null);
-  const [session, setSession] = useState<Session>({ address: null, isModerator: false, user: null });
+  const [session, setSession] = useState<Session>(initialSession);
   const [busy, setBusy] = useState<string | null>(null);
   const activeRef = useRef<WalletOption | null>(null);
 

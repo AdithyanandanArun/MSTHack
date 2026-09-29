@@ -1,16 +1,33 @@
+import Link from "next/link";
 import { DeployContract, ModeratorAdmin, VerifyResearcher } from "@/components/AdminPanel";
 import { ExplorerLink } from "@/components/Identity";
 import { appConfig } from "@/lib/server/config";
 import { contractOwner } from "@/lib/server/onchain";
-import { currentViewer, listModerators } from "@/lib/server/queries";
+import { canAdminister, requireSignedIn } from "@/lib/server/guard";
+import { listModerators } from "@/lib/server/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const cfg = appConfig();
-  const viewer = await currentViewer();
+  const viewer = await requireSignedIn("/admin");
+  if (!canAdminister(viewer)) {
+    return (
+      <div className="card mx-auto max-w-lg p-8 text-center">
+        <h1 className="text-lg font-semibold">Admin is for ReleaseBond moderators</h1>
+        <p className="mt-2 text-sm muted">
+          You are signed in as <b>{viewer.user.handle ?? `Researcher #${viewer.user.researcher_no}`}</b>, which is not a moderator. The contract owner can add
+          moderators here. To use another account, switch accounts in your wallet and sign in again.
+        </p>
+        <div className="mt-5 flex flex-wrap justify-center gap-2">
+          <Link href="/dashboard" className="btn btn-primary">Your dashboard</Link>
+          <Link href="/signin?switch=1&next=%2Fadmin" className="btn">Switch account</Link>
+        </div>
+      </div>
+    );
+  }
   const owner = await contractOwner();
-  const isOwner = !!viewer.address && viewer.address === owner;
+  const isOwner = viewer.address === owner;
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Admin & setup</h1>
@@ -36,7 +53,7 @@ export default async function AdminPage() {
           <li>Install the <a href="https://chromewebstore.google.com/detail/bridgekey/bfjojdcfenehemjgjlepdjomkpginlkg" target="_blank" rel="noreferrer">Bridgekey extension</a> and create a wallet.</li>
           <li>Select <b>MST Testnet</b> in Bridgekey and copy your address.</li>
           <li>Claim free test MSTC at <a href="https://faucet.masterstroke.academy" target="_blank" rel="noreferrer">faucet.masterstroke.academy</a> (10 MSTC per claim).</li>
-          <li>Connect the wallet here (top right) and sign in. Signing in costs no gas.</li>
+          <li>Sign in with that account (top right). Signing in costs no gas; each wallet account is a separate ReleaseBond account.</li>
           <li>Roles must be different wallets: the contract refuses a developer moderating their own room or committing findings to it. Create extra Bridgekey accounts for a full demo.</li>
         </ol>
       </section>

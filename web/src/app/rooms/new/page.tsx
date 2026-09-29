@@ -1,6 +1,10 @@
 import { NewRoomForm } from "@/components/NewRoomForm";
+import { requireSignedIn } from "@/lib/server/guard";
 
-export default function NewRoomPage() {
+export const dynamic = "force-dynamic";
+
+export default async function NewRoomPage() {
+  await requireSignedIn("/rooms/new");
   return (
     <div className="space-y-4">
       <div>

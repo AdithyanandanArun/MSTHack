@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import type { Hex } from "viem";
 import { FindingEditor } from "@/components/FindingEditor";
 import { chainNow } from "@/lib/server/config";
-import { currentViewer, getRoom, roomPhase } from "@/lib/server/queries";
+import { requireSignedIn } from "@/lib/server/guard";
+import { getRoom, roomPhase } from "@/lib/server/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export default async function NewFindingPage({ params }: { params: Promise<{ id:
   const room = getRoom(Number(id));
   if (!room) notFound();
   const phase = roomPhase(room, await chainNow());
-  const viewer = await currentViewer();
+  const viewer = await requireSignedIn(`/rooms/${room.id}/findings/new`);
   const blockedUnverified = !!room.require_verified && !!viewer.user && !viewer.user.verified;
   return (
     <div className="space-y-4">

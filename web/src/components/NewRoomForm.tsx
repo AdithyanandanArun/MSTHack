@@ -8,6 +8,7 @@ import { api, errorMessage } from "@/lib/client/api";
 import { short } from "@/lib/format";
 import { ArtifactCard, type ArtifactView } from "./ArtifactCard";
 import { useSignedIn, useWallet } from "./WalletProvider";
+import { SignInLink } from "./WalletButton";
 
 const HUNT = [
   { label: "3 minutes (demo)", s: 180 },
@@ -139,7 +140,7 @@ export function NewRoomForm() {
 
   return (
     <div className="space-y-5">
-      {!signedIn && <div className="flash flash-info">Connect and sign in with your wallet (top right) to register a release.</div>}
+      {!signedIn && <div className="flash flash-info">Your wallet is not connected to this account. <SignInLink>Reconnect it</SignInLink> to register a release.</div>}
 
       <section className="card">
         <div className="card-header"><h2 className="font-semibold">1. Exact release artifact</h2></div>

@@ -18,6 +18,7 @@ import { api, errorMessage } from "@/lib/client/api";
 import { AttachmentPicker, type UploadedFile } from "./Attachments";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { useSignedIn, useWallet } from "./WalletProvider";
+import { SignInLink } from "./WalletButton";
 
 const TEMPLATE = `## Summary
 
@@ -122,7 +123,7 @@ export function FindingEditor({ roomId, artifactHash, packageLabel }: { roomId: 
           <button className="btn btn-primary" disabled={!signedIn || !valid || !!step} onClick={submit}>
             {step ?? "Commit finding on-chain"}
           </button>
-          {!signedIn && <span className="text-sm muted">Sign in with your wallet first.</span>}
+          {!signedIn && <span className="text-sm muted"><SignInLink>Reconnect your wallet</SignInLink> to commit.</span>}
         </div>
       </div>
 

@@ -1,18 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { errorMessage } from "@/lib/client/api";
 import { short } from "@/lib/format";
 import { useSignedIn, useWallet } from "./WalletProvider";
 
+/** Link to the sign-in page that returns to the current page afterwards. */
+export function SignInLink({ children = "Sign in", className, style }: { children?: React.ReactNode; className?: string; style?: React.CSSProperties }) {
+  const pathname = usePathname();
+  return (
+    <Link href={`/signin?next=${encodeURIComponent(pathname || "/")}`} className={className} style={style}>
+      {children}
+    </Link>
+  );
+}
+
+/** Header account control: "Sign in" when signed out, otherwise the account menu. */
 export function WalletButton() {
-  const { options, account, connect, disconnect, signIn, session, walletChainId, config, busy } = useWallet();
+  const { account, disconnect, session, walletChainId, config } = useWallet();
   const signedIn = useSignedIn();
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -21,91 +31,67 @@ export function WalletButton() {
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
-  const run = async (fn: () => Promise<void>) => {
-    setError(null);
-    try {
-      await fn();
-      setOpen(false);
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  };
+  if (pathname?.startsWith("/signin")) return null;
+  if (!session.address || !session.user) {
+    return <SignInLink className="btn btn-primary">Sign in</SignInLink>;
+  }
 
   // Leave signed-in pages (dashboard, profile) and re-render server components without the session.
   const signOut = async () => {
+    setOpen(false);
     await disconnect();
     router.push("/");
     router.refresh();
   };
-
-  const wrongChain = account && walletChainId !== null && walletChainId !== config.chainId;
+  const name = session.user.handle ?? `Researcher #${session.user.researcher_no}`;
+  const walletSwitched = !!account && !signedIn;
+  const walletMissing = !account;
+  const wrongChain = signedIn && walletChainId !== null && walletChainId !== config.chainId;
+  const role = session.isModerator ? "moderator" : null;
+  const item = "block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--bg-subtle)]";
+  const next = encodeURIComponent(pathname || "/");
 
   return (
     <div className="relative" ref={ref}>
-      {!account ? (
-        <button className="btn btn-primary" onClick={() => setOpen((o) => !o)}>
-          Connect wallet
-        </button>
-      ) : !signedIn ? (
-        <button className="btn btn-primary" disabled={!!busy} onClick={() => run(signIn)}>
-          {busy ?? `Sign in as ${short(account, 4)}`}
-        </button>
-      ) : (
-        <button className="btn" onClick={() => setOpen((o) => !o)} style={{ background: "transparent", color: "var(--header-fg)" }}>
-          <span className="inline-block h-2 w-2 rounded-full" style={{ background: wrongChain ? "var(--attention)" : "var(--success)" }} />
-          {session.user?.handle ?? (session.user ? `Researcher #${session.user.researcher_no}` : short(account, 4))}
-          {session.isModerator ? <span className="label" style={{ color: "var(--header-fg)" }}>mod</span> : null}
-        </button>
-      )}
+      <button className="btn" onClick={() => setOpen((o) => !o)} style={{ background: "transparent", color: "var(--header-fg)" }} aria-expanded={open}>
+        <span
+          className="inline-block h-2 w-2 rounded-full"
+          style={{ background: walletSwitched || walletMissing || wrongChain ? "var(--attention)" : "var(--success)" }}
+        />
+        {name}
+        {role ? <span className="label" style={{ color: "var(--header-fg)" }}>{role}</span> : null}
+      </button>
       {open && (
         <div className="card absolute right-0 z-50 mt-2 w-80 p-2 shadow-lg" style={{ color: "var(--fg)" }}>
-          {!account ? (
-            <>
-              <p className="px-2 py-1 text-xs font-semibold muted">Choose a wallet</p>
-              {options.length === 0 && (
-                <div className="px-2 py-2 text-sm">
-                  No browser wallet detected. Install{" "}
-                  <a href="https://chromewebstore.google.com/detail/bridgekey/bfjojdcfenehemjgjlepdjomkpginlkg" target="_blank" rel="noreferrer">
-                    Bridgekey
-                  </a>
-                  , create a wallet, select <b>MST Testnet</b> and claim test MSTC from the{" "}
-                  <a href="https://faucet.masterstroke.academy" target="_blank" rel="noreferrer">
-                    faucet
-                  </a>
-                  .
-                </div>
-              )}
-              {options.map((o) => (
-                <button key={o.id} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-[var(--bg-subtle)]" onClick={() => run(() => connect(o.id))}>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- EIP-6963 icons are data URIs */}
-                  {o.icon ? <img src={o.icon} alt="" className="h-5 w-5" /> : <span className="h-5 w-5 rounded bg-[var(--bg-inset)]" />}
-                  <span className="truncate">{o.name}</span>
-                </button>
-              ))}
-            </>
-          ) : (
-            <>
-              <div className="px-2 py-1 text-xs muted">
-                Connected <span className="mono">{short(account, 8)}</span>
-                {wrongChain ? <div style={{ color: "var(--attention)" }}>Wallet is on another network; it will be switched to {config.chainName} when you sign a transaction.</div> : null}
-              </div>
-              <Link href="/dashboard" className="block rounded px-2 py-1.5 hover:bg-[var(--bg-subtle)]" style={{ color: "var(--fg)" }} onClick={() => setOpen(false)}>
-                Your dashboard
-              </Link>
-              <Link href={`/researchers/${account.toLowerCase()}`} className="block rounded px-2 py-1.5 hover:bg-[var(--bg-subtle)]" style={{ color: "var(--fg)" }} onClick={() => setOpen(false)}>
-                Your profile
-              </Link>
-              <button className="block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--bg-subtle)]" onClick={() => run(signOut)}>
-                Sign out
-              </button>
-            </>
+          <div className="px-2 py-1.5">
+            <div className="text-xs muted">Signed in as</div>
+            <div className="font-semibold">{name}</div>
+            <div className="mono muted">{short(session.address, 10)}</div>
+          </div>
+          {walletSwitched && (
+            <div className="flash flash-warn my-1 text-xs">
+              Your wallet is now on <span className="mono">{short(account!, 6)}</span>, a different account.{" "}
+              <Link href={`/signin?next=${next}`} onClick={() => setOpen(false)}>Sign in as that account</Link> or switch back in your wallet.
+            </div>
           )}
-          {error && <div className="flash flash-error mt-2">{error}</div>}
-        </div>
-      )}
-      {error && !open && (
-        <div className="flash flash-error absolute right-0 z-50 mt-2 w-80" style={{ color: "var(--fg)" }} onClick={() => setError(null)}>
-          {error}
+          {walletMissing && (
+            <div className="flash flash-warn my-1 text-xs">
+              Your wallet is not connected, so you cannot sign transactions.{" "}
+              <Link href={`/signin?next=${next}`} onClick={() => setOpen(false)}>Reconnect</Link>
+            </div>
+          )}
+          {wrongChain && (
+            <div className="flash flash-warn my-1 text-xs">Your wallet is on another network; it will be switched to {config.chainName} when you sign a transaction.</div>
+          )}
+          <div className="my-1 border-t" style={{ borderColor: "var(--border-muted)" }} />
+          <Link href="/dashboard" className={item} style={{ color: "var(--fg)" }} onClick={() => setOpen(false)}>Your dashboard</Link>
+          <Link href={`/researchers/${session.address}`} className={item} style={{ color: "var(--fg)" }} onClick={() => setOpen(false)}>Your public profile</Link>
+          {(session.isModerator || !config.contractAddress) && (
+            <Link href="/admin" className={item} style={{ color: "var(--fg)" }} onClick={() => setOpen(false)}>Admin</Link>
+          )}
+          <div className="my-1 border-t" style={{ borderColor: "var(--border-muted)" }} />
+          <Link href={`/signin?switch=1&next=${next}`} className={item} style={{ color: "var(--fg)" }} onClick={() => setOpen(false)}>Switch account</Link>
+          <button className={item} onClick={signOut}>Sign out</button>
         </div>
       )}
     </div>

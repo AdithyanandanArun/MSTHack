@@ -17,6 +17,7 @@ import { EMPHASIS, KindLabel, Label, OutcomeLabel, SeverityLabel, VerdictLabel }
 import { Markdown } from "./Markdown";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { useSignedIn, useWallet } from "./WalletProvider";
+import { SignInLink } from "./WalletButton";
 
 interface Attachment {
   id: number;
@@ -336,7 +337,7 @@ export function FindingThread({ d, now, explorer }: { d: FindingDetail; now: num
             />
           ) : (
             <div className="flash flash-info mt-4 text-sm">
-              {!signedIn ? "Sign in with your wallet to take part in peer review." : d.room.phase === "hunting" ? "Discussion opens after the hunt closes." : "You cannot respond to this finding in the current phase."}
+              {!signedIn ? <><SignInLink>Sign in</SignInLink> to take part in peer review.</> : d.room.phase === "hunting" ? "Discussion opens after the hunt closes." : "You cannot respond to this finding in the current phase."}
             </div>
           )}
         </div>

@@ -7,6 +7,7 @@ import { releaseBondAbi, releaseBondBytecode } from "@/lib/chain/releaseBondArti
 import { api, errorMessage } from "@/lib/client/api";
 import { short } from "@/lib/format";
 import { useSignedIn, useWallet } from "./WalletProvider";
+import { SignInLink } from "./WalletButton";
 
 export function DeployContract({ hasContract, isOwner }: { hasContract: boolean; isOwner: boolean }) {
   const router = useRouter();
@@ -45,7 +46,7 @@ export function DeployContract({ hasContract, isOwner }: { hasContract: boolean;
       </p>
       {hasContract && <p className="text-sm" style={{ color: "var(--attention)" }}>A contract is already configured; deploying again replaces it for this server.</p>}
       <button className="btn btn-primary" disabled={!signedIn || !account} onClick={deploy}>Deploy ReleaseBond from my wallet</button>
-      {!signedIn && <span className="ml-2 text-sm muted">Sign in first.</span>}
+      {!signedIn && <span className="ml-2 text-sm muted"><SignInLink>Reconnect your wallet</SignInLink> to deploy.</span>}
       {done && <div className="flash flash-success">Deployed and registered at <span className="mono break-all">{done}</span>.</div>}
       {error && <div className="flash flash-error">{error}</div>}
     </div>

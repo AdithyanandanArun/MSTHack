@@ -501,13 +501,21 @@ async function main() {
     [`/rooms/${roomId}?tab=release`, "Deterministic rule scan"],
     [`/rooms/${roomId}/findings/${aliceF.id}`, "postinstall reads ~/.ssh keys"],
     [`/researchers/${alice.address}`, "On-chain security reputation"],
-    ["/admin", "Contract deployment"],
+    ["/signin?next=%2Fadmin", "Sign in to ReleaseBond"],
     ["/packages/npm/releasebond-demo-telemetry", "Release security history"],
     [`/researchers/${dev.address}`, "Review track record"],
   ] as const) {
     const r = await anon.req<string>("GET", p, undefined, true);
     assert(r.status === 200 && r.data.includes(needle), `page ${p} renders`);
   }
+  for (const p of ["/admin", "/dashboard", "/rooms/new", `/rooms/${roomId}/findings/new`]) {
+    const r = await fetch(`${BASE}${p}`, { redirect: "manual" });
+    const to = r.headers.get("location") ?? "";
+    assert(r.status >= 300 && r.status < 400 && to.includes(`/signin?next=${encodeURIComponent(p)}`), `signed out, ${p} redirects to the sign-in page`);
+  }
+  assert((await owner.req<string>("GET", "/admin", undefined, true)).data.includes("Contract deployment"), "admin page opens for a moderator");
+  assert((await alice.req<string>("GET", "/admin", undefined, true)).data.includes("Admin is for ReleaseBond moderators"), "admin page is refused to a researcher");
+  assert((await alice.req<string>("GET", "/dashboard", undefined, true)).data.includes("Your findings"), "dashboard opens for a signed-in researcher");
 
   console.log("• abuse limits");
   let limited: Response | null = null;

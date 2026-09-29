@@ -3,7 +3,8 @@ import Link from "next/link";
 import { BusyToast, WalletButton } from "@/components/WalletButton";
 import { WalletProvider, type ClientConfig } from "@/components/WalletProvider";
 import { appConfig } from "@/lib/server/config";
-import { listModerators } from "@/lib/server/queries";
+import { canAdminister } from "@/lib/server/guard";
+import { currentViewer, listModerators } from "@/lib/server/queries";
 import { syncChain } from "@/lib/server/sync";
 import "./globals.css";
 
@@ -28,27 +29,32 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     sandboxEnabled: cfg.sandboxEnabled,
     moderators: listModerators(),
   };
+  const viewer = await currentViewer();
+  const session = { address: viewer.address, isModerator: viewer.isModerator, user: viewer.user };
   return (
     <html lang="en">
       <body className="min-h-screen antialiased">
-        <WalletProvider config={config}>
+        <WalletProvider config={config} initialSession={session}>
           <header style={{ background: "var(--header)", color: "var(--header-fg)" }}>
-            <div className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
-              <Link href="/" className="flex items-center gap-2 text-base font-semibold" style={{ color: "var(--header-fg)" }}>
+            {/* Phones: logo and wallet on the first row, nav on a second, scrollable row. */}
+            <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+              <Link href="/" className="flex shrink-0 items-center gap-2 text-base font-semibold" style={{ color: "var(--header-fg)" }}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
                   <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" stroke="currentColor" strokeWidth="2" />
                   <path d="m8.5 12 2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
                 ReleaseBond
               </Link>
-              <nav className="flex flex-1 items-center gap-4 text-sm">
+              <nav className="order-3 -mx-1 flex w-full items-center gap-4 overflow-x-auto px-1 text-sm whitespace-nowrap md:order-none md:mx-0 md:w-auto md:flex-1 md:px-0">
                 <Link href="/" style={{ color: "var(--header-fg)" }}>Security rooms</Link>
                 <Link href="/rooms/new" style={{ color: "var(--header-fg)" }}>Fund a release</Link>
                 <Link href="/dashboard" style={{ color: "var(--header-fg)" }}>Dashboard</Link>
-                <Link href="/admin" style={{ color: "var(--header-fg)" }}>Admin</Link>
+                {canAdminister(viewer) && <Link href="/admin" style={{ color: "var(--header-fg)" }}>Admin</Link>}
               </nav>
-              <span className="hidden text-xs opacity-70 sm:inline">{cfg.chainName}</span>
-              <WalletButton />
+              <div className="ml-auto flex items-center gap-3 md:ml-0">
+                <span className="hidden text-xs opacity-70 sm:inline">{cfg.chainName}</span>
+                <WalletButton />
+              </div>
             </div>
           </header>
           <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
