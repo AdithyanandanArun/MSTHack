@@ -16,13 +16,13 @@ Run `npm run gates` to re-verify everything. Expected: 8 × PASS. G5/G6 need Doc
 ### Do this first: G9 (deploy on MST Testnet)
 
 1. Install Bridgekey, create 3+ accounts, select MST Testnet, and claim MSTC for each at https://faucet.masterstroke.academy.
-2. `cd web && cp .env.example .env.local && npm run build && npm start`, then open http://localhost:3000/admin.
+2. `npm run demo:mst`, then open http://localhost:3000/admin (README section B has the full runbook).
 3. Connect Bridgekey → sign in → **Deploy ReleaseBond from my wallet** (≈0.0033 MSTC). The server verifies the bytecode and stores the address in `web/data/releasebond.sqlite` (`settings` table, key `contract:91562037`).
 4. For a shared or production deployment, also pin it in env: `RELEASEBOND_CONTRACT_ADDRESS=0x…` and `RELEASEBOND_DEPLOY_BLOCK=<block>`. Without the deploy block, the indexer would scan from genesis (about 5.8M blocks in 5k chunks).
 5. Record the address and tx in GATES.md G9 `EVIDENCE:` and in the README.
 6. Publish the verified source on the explorer: `npm --prefix contracts run verify:mst -- --address <address> --owner <owner>`. The payload is proven offline (G25) to recompile to the exact bytecode, and MST's Blockscout supports standard-input verification with solc `v0.8.28+commit.7893614a`. The real submission is untested until the contract is deployed.
 
-**Untested with the real extension:** no browser was available in the build environment, so Bridgekey itself was never clicked through. The wallet code (`web/src/components/WalletProvider.tsx`) discovers wallets via **EIP-6963** and falls back to `window.ethereum`. If Bridgekey injects under another global, add it in the discovery `useEffect`. Chain switching uses `wallet_switchEthereumChain` and falls back to `wallet_addEthereumChain`.
+**BridgeKey was driven for real** (extension 0.2.5 in Chromium against a local chain behind an HTTPS proxy): connect, sign-in, `/admin` deploy, funding a room and committing a finding all work through its approval popups. What is still untested is only the MST-specific part: real MSTC from the faucet and the deploy on MST itself. See the BridgeKey trap below for its limits (no EIP-712).
 
 ## Where things live
 
@@ -76,6 +76,13 @@ Every backend requirement in the spec is implemented and covered by gates, excep
 
 - **EIP-712 immutables change the runtime code at deploy time.** Deployed code never equals the compiled `deployedBytecode`. Compare with the immutable ranges masked (`contracts/scripts/immutables.js`, `web/src/lib/chain/runtimeCode.ts`; the ranges are exported by `npm --prefix contracts run export`). An exact comparison rejects every genuine deployment.
 - A signed-out sign-in rate limit must never be one shared bucket, or one client can lock everyone out. Sign-in is limited per claimed wallet.
+- **Never transform hashed input on the server.** The finding schema used to `.trim()` the description, so every browser report that kept the editor template's trailing newline failed with "client and server computed different hashes". Validate trimmed length, but hash and store the text exactly as sent. `canonical.ts` itself must not change (it would break reveals of existing commitments).
+- **Browser-only bugs need a browser.** The API E2E hashes in Node and never saw the trim bug, the dev wallet signing through the read-only `/api/rpc` proxy, or the mobile header overflow. `npm run gates` now includes `check-ui` (G31), which drives the whole demo in Chromium via `playwright-core` (it uses a cached Playwright Chromium or `CHROME_PATH`; no browser download).
+- **Mobile overflow checks must use `clientWidth`.** With mobile emulation the browser zooms out to fit wide content, so `innerWidth` grows and hides the overflow.
+- **Unlayered CSS beats every `@layer`.** A plain `a { color }` rule turned every `.btn-primary` link blue on green. Base element styles live in `@layer base`.
+- **Hardhat only mines on transactions**, so chain time (which drives phases) stood still between transactions. `dev-local` turns on 1-second interval mining; the server also caches chain time for 3 s, which the UI tour waits out after `evm_increaseTime`.
+- **BridgeKey 0.2.5 (inspected and driven for real):** it announces itself over EIP-6963 (`io.bridgekey.wallet`) and implements `eth_requestAccounts`, `personal_sign`, `eth_sendTransaction`, chain switch/add and read calls; **`eth_signTypedData_v4` returns -32601 "Unsupported method"** (so moderator-panel approvals need another wallet). Its CSP only allows `https:` RPCs. It warns on a SIWE `domain` that is not the page hostname *without* port, so the app sends the bare hostname to BridgeKey and the server accepts host or hostname. Account switches are not announced for accounts not yet connected to the site, so the app polls `eth_accounts`. Approvals open in a popup window (or side panel) that must be unlocked with the wallet password.
+- `check-e2e` and `check-ui` rebuild when any web source is newer than the build; `check-ui` uses its own dist dir (`web/.next-ui`) so it never disturbs a running `next start`.
 
 ## Conventions
 

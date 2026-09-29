@@ -66,18 +66,27 @@ npm run dev:local             # Hardhat chain :8545 + ReleaseBond deploy + web o
 
 Open http://localhost:3000 and choose **Connect wallet → Dev #N**. The dev wallets are the well-known Hardhat keys and are only offered on the local chain:
 `Dev #0` owner/moderator · `Dev #1` developer · `Dev #2–#4` researchers.
-Use `npm run advance-time -- 600` to move a room from hunting to disclosure to review.
+The local chain mines a block every second, so room phases follow the wall clock (a 3-minute hunt closes after 3 minutes and the page moves on by itself). Use `npm run advance-time -- 600` to skip ahead.
 
-### B. MST Testnet with Bridgekey
+### B. MST Testnet with BridgeKey (the live demo)
 
-1. Install Bridgekey, create a wallet, select **MST Testnet**, and claim MSTC from the faucet. Create **at least three accounts** (owner/moderator, developer, researcher), because the contract rejects conflicts of interest.
-2. `cd web && cp .env.example .env.local` (the defaults target MST Testnet), then `npm run build && npm start`. You can also use `npm run dev`.
-3. Open `/admin`, connect Bridgekey, sign in, and click **Deploy ReleaseBond from my wallet**. The server reads the receipt, checks that the runtime bytecode matches this build, and stores the address. Add more moderators on the same page.
+1. **Wallet.** Install [BridgeKey](https://chromewebstore.google.com/detail/bridgekey/bfjojdcfenehemjgjlepdjomkpginlkg) and create a wallet. MST Testnet is built in (chain ID 91562037; the coin shows as tMSTC). Open the account menu and use **Add account** until you have five accounts: Account 1 = owner/moderator, Account 2 = developer, Accounts 3–5 = researchers A–C. Roles must be different wallets, because the contract rejects conflicts of interest.
+2. **Funds.** Claim 10 MSTC for Account 1 at [faucet.masterstroke.academy](https://faucet.masterstroke.academy) (captcha). From Account 1, **Send** about 3 MSTC to the developer and 0.5 MSTC to each researcher. The deploy costs about 0.005 MSTC; a commit, reveal or withdrawal costs well under 0.001 MSTC.
+3. **Start the app:** `npm run demo:mst`, then open http://localhost:3000. It builds when needed, keeps MST data in `web/data-mst`, and uses the Docker sandbox if Docker is running.
+4. **Deploy once.** In BridgeKey select Account 1. In the app click **Sign in** (top right), choose **BridgeKey**, **Approve connection**, click **Sign in as 0x…**, **Approve**, and pick a display name. Then open **Admin**, click **Deploy ReleaseBond from my wallet** and **Confirm**. The server checks the deployed bytecode against this build and stores the address; Account 1 becomes the owner and first moderator. Only moderators see Admin afterwards.
+5. **Switching roles.** Each wallet account is its own ReleaseBond account. Select another account in BridgeKey, then use the account menu's **Switch account** (or **Sign in**) and sign in as that account; the first time, approve the connection and pick a name. Tip: a separate Chrome profile per role (each with BridgeKey and the same recovery phrase imported) keeps every role signed in side by side.
+6. *(Optional)* Publish the verified source with `npm --prefix contracts run verify:mst -- --address <deployed address> --owner <Account 1>`.
 
-   *Alternative:* put `PRIVATE_KEY=` in `contracts/.env`, run `npm run deploy:mst`, then restart the web app (it picks up `contracts/deployments/mstTestnet.json`).
-4. Publish the verified source on MST Testnet's explorer with `npm --prefix contracts run verify:mst -- --address <deployed address> --owner <owner>`. Use the same owner address passed to the constructor during deployment.
+Things to know on MST (checked against the BridgeKey 0.2.5 extension itself):
+
+- BridgeKey supports sign-in (`personal_sign`) and transactions, but **not EIP-712 signatures** (`eth_signTypedData_v4`). Moderator-panel approvals need EIP-712, so leave the **moderator panel** empty when every moderator uses BridgeKey (the form warns you).
+- Phases follow real time: a 3-minute hunt closes after 3 minutes and open pages move on by themselves. `npm run advance-time` only works on the local chain, so fund the demo room about five minutes before you need it in peer review.
+- BridgeKey only talks to HTTPS RPC endpoints (MST's is), which is why the local Hardhat chain is used with the built-in dev wallets instead.
+- *Scripted alternative to step 4:* put `PRIVATE_KEY=` in `contracts/.env`, run `npm run deploy:mst`, and restart the app (it reads `contracts/deployments/mstTestnet.json`).
 
 ## Hero demo script (about 5 minutes, local or MST)
+
+Local: pick **Dev #1** for the developer, **Dev #2–#4** for researchers A–C and **Dev #0** for the moderator from the wallet menu. MST: switch the matching BridgeKey account as in step 5 above.
 
 1. **Developer** → *Fund a release* → *Upload artifact* → `demo/artifacts/releasebond-demo-telemetry-2.0.0.tgz`, with previous `…-1.0.0.tgz`. The app shows the hash, the diff (+`scripts/telemetry.js`, a new `postinstall`) and rule hits. Lock the bounty with a **3-minute hunt** and a **2-minute disclosure**.
 2. **Researcher A** → *Submit private finding*: title, markdown report, PoC, proof file, and ticked observations (install script, sensitive read, network, secret env). The browser hashes the report and commits it on-chain. Others see only "Private finding (commitment 0x…)".
@@ -99,9 +108,11 @@ npm run gates     # runs every automated gate below
 |---|---|---|
 | G1 | `scripts/check-contracts.mjs` | 25 contract tests: escrow, commit/reveal, settlement caps, refunds, access control, moderator panels |
 | G2 | `scripts/check-mst-testnet.mjs` | live MST Testnet accepts the bytecode (chain ID and deploy gas estimate) |
-| G3 | `scripts/check-web-unit.mjs` | 45 unit tests: Solidity hash parity, rule positive/negative controls, sandbox parser, visibility, payout |
+| G3 | `scripts/check-web-unit.mjs` | 48 unit tests: Solidity hash parity, rule positive/negative controls, sandbox parser, visibility, payout |
 | G4 | `scripts/check-web-build.mjs` | typecheck + lint (0 warnings) + production build |
-| G5 | `scripts/check-e2e.mjs` | 105-check lifecycle (including verified-only rooms, appeals, moderator panels and queue, track records, health, in-app deploy verification, rate limits and upload quota) on a fresh chain through the real HTTP API and production server |
+| G5 | `scripts/check-e2e.mjs` | 107-check lifecycle (including verified-only rooms, appeals, moderator panels and queue, track records, health, in-app deploy verification, rate limits and upload quota) on a fresh chain through the real HTTP API and production server |
+| G31 | `scripts/check-ui.mjs` | the hero demo clicked through a real browser with the dev wallets (fund, commit, respond, reveal, reproduce, refute, adjudicate, settle, withdraw), then every page audited in light/dark x desktop/mobile for console errors, horizontal overflow and colour contrast (screenshots in `web/.ui-tour/`) |
+| G32 | `npm run check:bridgekey` | the real BridgeKey extension (downloaded from the Chrome Web Store) connects, signs in, deploys from `/admin`, follows account switches, funds a room and commits a finding through its approval popups; not part of `npm run gates` because it downloads a third-party extension |
 | G6 | `scripts/check-sandbox.mjs` | Docker sandbox sees key read, egress, secret env and install hook, and stays silent on the benign control |
 | G7 | `scripts/check-pacman.mjs` | real Arch package fetched, checksum-verified against the repo DB, normalized |
 | G18 | `scripts/check-explorer.mjs` | explorer links resolve on MST Testnet's Blockscout (positive and negative control) |

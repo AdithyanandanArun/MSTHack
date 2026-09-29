@@ -160,3 +160,13 @@ ABANDON: G12 depends on G11; not pursued
   CHECK: node scripts/check-web-unit.mjs
   EXPECT: WEB UNIT VERIFIED
   EVIDENCE: automatic-evidence=v1; definition-sha256=5234dd54e2c379e3ba36b330c9774284b0418d8dad262b963ed6ad9159c430f3; exit=0; EXPECT=matched; output-sha256=064270929b09bd0717a1bd90f5bef6dfd94fa0203ade46310d3b282aa2b5809c; output-bytes=594; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
+
+- [x] G31: the hero demo runs end to end through the real UI in Chromium (fund, commit, respond, reveal, reproduce, refute, adjudicate, settle, withdraw) and every page is free of console errors, mobile horizontal overflow and colour-contrast violations in light and dark themes on desktop and mobile
+  CHECK: node scripts/check-ui.mjs
+  EXPECT: /UI TOUR PASSED: flow complete; (1\d|[2-9]\d) pages x 4 variants; 0 console errors; 0 overflow; 0 contrast violations/
+  EVIDENCE: automatic-evidence=v1; definition-sha256=e247a05bf68a1a711731e77ad3c1207a328289e79225daf7c5eeb3c2390f3004; exit=0; EXPECT=matched; output-sha256=b973c8eb5564a3c84023b0829eb599ff9f969e9017ecdb64bf0053f763207da5; output-bytes=511; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
+
+- [x] G32: the real BridgeKey extension (downloaded from the Chrome Web Store) connects, signs in, deploys ReleaseBond from /admin, follows account switches, funds a room and commits a finding through its own approval popups (needs internet, unzip and openssl)
+  CHECK: node scripts/check-ui.mjs --tour scripts/bridgekey-tour.mjs
+  EXPECT: /BRIDGEKEY TOUR PASSED: BridgeKey [\d.]+; connect, sign-in, admin deploy, account switch, fund, commit/
+  EVIDENCE: automatic-evidence=v1; definition-sha256=2b321784b75fe3afce0506e04c469b647d6d82bd1b62e9d9285734af8dc792ca; exit=0; EXPECT=matched; output-sha256=3f40854a70effab45220b11ab14be8596286d7fb34cd7931b6b20b5d6156361d; output-bytes=688; shell=/bin/sh; cwd=/home/adithyan/Documents/MSTHack; path=635bb48c0f05/9 entries
