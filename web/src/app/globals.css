@@ -2,6 +2,7 @@
 
 /* GitHub-Primer-inspired tokens. Light by default, dark via prefers-color-scheme. */
 :root {
+  color-scheme: light dark; /* native controls (checkboxes, selects, scrollbars) follow the theme */
   --bg: #ffffff;
   --bg-subtle: #f6f8fa;
   --bg-inset: #eff2f5;
@@ -25,6 +26,14 @@
   --btn-primary-hover: #1a7f37;
   --header: #1f2328;
   --header-fg: #ffffff;
+  /* Solid backgrounds for white text (badges, pills); each is at least 4.5:1 against #fff. */
+  --success-emphasis: #1f883d;
+  --accent-emphasis: #0969da;
+  --danger-emphasis: #cf222e;
+  --attention-emphasis: #9a6700;
+  --done-emphasis: #8250df;
+  --severe-emphasis: #bc4c00;
+  --neutral-emphasis: #59636e;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -52,6 +61,13 @@
     --btn-primary-hover: #29903b;
     --header: #010409;
     --header-fg: #f0f6fc;
+    --success-emphasis: #238636;
+    --accent-emphasis: #1f6feb;
+    --danger-emphasis: #da3633;
+    --attention-emphasis: #9e6a03;
+    --done-emphasis: #8957e5;
+    --severe-emphasis: #bd561d;
+    --neutral-emphasis: #656c76;
   }
 }
 
@@ -81,11 +97,33 @@ body {
   line-height: 1.5;
 }
 
-a {
-  color: var(--accent);
-}
-a:hover {
-  text-decoration: underline;
+/* Base layer, so component classes (.btn, .tabnav a) can restyle links. Unlayered, this rule would
+   beat every @layer rule and turn button-styled links blue. */
+@layer base {
+  a {
+    color: var(--accent);
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+  input[type="file"] {
+    @apply max-w-full text-sm;
+    color: var(--fg-muted);
+  }
+  input[type="file"]::file-selector-button {
+    @apply mr-3 cursor-pointer rounded-md border px-3 py-[5px] text-sm font-medium;
+    background: var(--bg-subtle);
+    border-color: var(--border);
+    color: var(--fg);
+    font-family: inherit;
+  }
+  input[type="file"]::file-selector-button:hover {
+    background: var(--bg-inset);
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--accent);
+  }
 }
 
 @layer components {
@@ -119,7 +157,7 @@ a:hover {
     background: var(--bg);
   }
   .card-header {
-    @apply flex items-center justify-between gap-2 rounded-t-md border-b px-4 py-3;
+    @apply flex flex-wrap items-center justify-between gap-2 rounded-t-md border-b px-4 py-3;
     border-color: var(--border);
     background: var(--bg-subtle);
   }
@@ -143,12 +181,14 @@ a:hover {
   .muted {
     color: var(--fg-muted);
   }
+  /* Scrolls sideways on narrow screens; the baseline is an inset shadow so the scroll box cannot clip
+     the active tab's underline. */
   .tabnav {
-    @apply flex gap-1 border-b;
-    border-color: var(--border);
+    @apply flex gap-1 overflow-x-auto;
+    box-shadow: inset 0 -1px 0 var(--border);
   }
   .tabnav a {
-    @apply -mb-px flex items-center gap-2 border-b-2 border-transparent px-3 py-2 text-sm;
+    @apply flex shrink-0 items-center gap-2 border-b-2 border-transparent px-3 py-2 text-sm whitespace-nowrap;
     color: var(--fg);
   }
   .tabnav a[aria-current="page"] {
@@ -161,6 +201,14 @@ a:hover {
   }
   .field-label {
     @apply mb-1 block text-sm font-semibold;
+  }
+  /* Withdrawn responses stay readable (no opacity) but are clearly set apart. */
+  .card-withdrawn {
+    border-style: dashed;
+    background: var(--bg-subtle);
+  }
+  .card-withdrawn .markdown {
+    color: var(--fg-muted);
   }
   .flash {
     @apply rounded-md border px-4 py-3 text-sm;

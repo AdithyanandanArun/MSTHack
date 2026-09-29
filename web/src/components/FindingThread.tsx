@@ -13,7 +13,7 @@ import { COMMENT_KIND_LABEL, type CommentKind, type Phase } from "@/lib/phase";
 import { AttachmentPicker, type UploadedFile } from "./Attachments";
 import { EvidenceReportView } from "./EvidenceReport";
 import { ExplorerLink, Researcher, type IdentityInfo } from "./Identity";
-import { KindLabel, Label, OutcomeLabel, SeverityLabel, VerdictLabel } from "./Labels";
+import { EMPHASIS, KindLabel, Label, OutcomeLabel, SeverityLabel, VerdictLabel } from "./Labels";
 import { Markdown } from "./Markdown";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { useSignedIn, useWallet } from "./WalletProvider";
@@ -167,7 +167,7 @@ export function FindingThread({ d, now, explorer }: { d: FindingDetail; now: num
     });
 
   const state = f.status === "draft" ? "Draft" : f.verdict ? f.verdict[0].toUpperCase() + f.verdict.slice(1) : "Open";
-  const stateColor = f.status === "draft" ? "var(--fg-muted)" : f.verdict === "valid" ? "var(--done)" : f.verdict === "invalid" ? "var(--danger)" : "var(--success)";
+  const stateColor = f.status === "draft" ? EMPHASIS.muted : f.verdict === "valid" ? EMPHASIS.done : f.verdict === "invalid" ? EMPHASIS.danger : EMPHASIS.success;
   const counts = d.comments.filter((c) => !c.withdrawn).reduce<Record<string, number>>((a, c) => ((a[c.kind] = (a[c.kind] ?? 0) + 1), a), {});
 
   const renderComment = (c: Comment, depth: number) => {
@@ -175,7 +175,7 @@ export function FindingThread({ d, now, explorer }: { d: FindingDetail; now: num
     return (
       <div key={c.id} style={{ marginLeft: depth ? 24 : 0 }} className="relative">
         {depth > 0 && <span className="absolute top-0 -left-3 h-full border-l-2" style={{ borderColor: "var(--border-muted)" }} />}
-        <div className={`card mt-3 ${c.withdrawn ? "opacity-60" : ""}`}>
+        <div className={`card mt-3 ${c.withdrawn ? "card-withdrawn" : ""}`}>
           <div className="card-header py-2 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               <Researcher who={c.author} role={c.role} />

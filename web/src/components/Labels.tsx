@@ -13,6 +13,17 @@ const TONE: Record<Tone, React.CSSProperties> = {
   muted: { color: "var(--fg-muted)", borderColor: "var(--border)", background: "transparent" },
 };
 
+/** Solid background for white text in each tone (see the --*-emphasis tokens). */
+export const EMPHASIS: Record<Tone, string> = {
+  accent: "var(--accent-emphasis)",
+  success: "var(--success-emphasis)",
+  danger: "var(--danger-emphasis)",
+  attention: "var(--attention-emphasis)",
+  done: "var(--done-emphasis)",
+  severe: "var(--severe-emphasis)",
+  muted: "var(--neutral-emphasis)",
+};
+
 export function Label({ tone = "muted", children, title }: { tone?: Tone; children: React.ReactNode; title?: string }) {
   return (
     <span className="label" style={TONE[tone]} title={title}>
@@ -31,12 +42,11 @@ const PHASE_TONE: Record<Phase, Tone> = {
 };
 
 export function PhaseBadge({ phase, large }: { phase: Phase; large?: boolean }) {
-  const style = TONE[PHASE_TONE[phase]];
   if (!large) return <Label tone={PHASE_TONE[phase]}>{PHASE_LABEL[phase]}</Label>;
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold text-white"
-      style={{ background: style.color as string }}
+      style={{ background: EMPHASIS[PHASE_TONE[phase]] }}
     >
       {PHASE_LABEL[phase]}
     </span>
